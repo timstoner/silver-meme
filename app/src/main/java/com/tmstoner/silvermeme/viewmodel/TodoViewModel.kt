@@ -61,11 +61,19 @@ class TodoViewModel(
     // Raw search input — debounced before persisting to avoid per-keystroke DataStore writes.
     private val _searchInput = MutableStateFlow("")
 
+    // ── Trash state ───────────────────────────────────────────────────────────
+
+    private val _trashedTodos = MutableStateFlow<List<TodoItem>>(emptyList())
+    val trashedTodos: StateFlow<List<TodoItem>> = _trashedTodos.asStateFlow()
+
     // ── Init ──────────────────────────────────────────────────────────────────
 
     init {
         restoreFilterState()
         loadTodos()
+        loadTrash()
+        // Purge trash items older than 30 days on startup.
+        viewModelScope.launch { repository.purgeOldTrash() }
         // Debounce search input: persist to DataStore only after 250 ms of inactivity.
         viewModelScope.launch {
             _searchInput
@@ -87,6 +95,14 @@ class TodoViewModel(
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = e.message) }
             }
+        }
+    }
+
+    private fun loadTrash() {
+        viewModelScope.launch {
+            try {
+                _trashedTodos.value = repository.getTrashedTodos()
+            } catch (_: Exception) {}
         }
     }
 
@@ -193,12 +209,48 @@ class TodoViewModel(
         }
     }
 
+    /**
+     * Moves [todo] to trash (Tasks/.trash/) and refreshes both lists.
+     * Call [undoTrash] within the snackbar action window to restore immediately.
+     */
+    fun trashTodo(todo: TodoItem) {
+        viewModelScope.launch {
+            try {
+                repository.trashTodo(todo)
+                notificationScheduler?.cancel(todo.id)
+                loadTodos()
+                loadTrash()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    /** Hard-deletes [todo] permanently (for use from the Trash screen). */
     fun deleteTodo(todo: TodoItem) {
         viewModelScope.launch {
             try {
                 repository.deleteTodo(todo)
                 notificationScheduler?.cancel(todo.id)
                 loadTodos()
+                loadTrash()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    /** Restores [todo] from trash back to Tasks/ and refreshes both lists. */
+    fun restoreTodo(todo: TodoItem) {
+        viewModelScope.launch {
+            try {
+                val restored = repository.restoreTodo(todo)
+                // Reschedule reminder if it had a due date
+                if (!restored.isCompleted && restored.dueDate != null) {
+                    notificationScheduler?.schedule(restored)
+                }
+                loadTodos()
+                loadTrash()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             }

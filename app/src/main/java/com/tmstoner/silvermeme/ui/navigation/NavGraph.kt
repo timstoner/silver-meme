@@ -16,6 +16,7 @@ import androidx.navigation.navArgument
 import com.tmstoner.silvermeme.ui.screens.SettingsScreen
 import com.tmstoner.silvermeme.ui.screens.TodoDetailScreen
 import com.tmstoner.silvermeme.ui.screens.TodoListScreen
+import com.tmstoner.silvermeme.ui.screens.TrashScreen
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 
@@ -24,6 +25,7 @@ object Routes {
     const val TODO_NEW = "todo_new"
     const val TODO_EDIT = "todo_edit/{todoId}"
     const val SETTINGS = "settings"
+    const val TRASH = "trash"
 
     fun todoEdit(todoId: String) = "todo_edit/$todoId"
 }
@@ -40,10 +42,11 @@ fun AppNavGraph(
     ) {
         composable(Routes.TODO_LIST) {
             TodoListScreen(
-                viewModel = todoViewModel,
-                onAddTodo = { navController.navigate(Routes.TODO_NEW) },
-                onEditTodo = { todo -> navController.navigate(Routes.todoEdit(todo.id)) },
-                onOpenSettings = { navController.navigate(Routes.SETTINGS) }
+                viewModel     = todoViewModel,
+                onAddTodo     = { navController.navigate(Routes.TODO_NEW) },
+                onEditTodo    = { todo -> navController.navigate(Routes.todoEdit(todo.id)) },
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onOpenTrash   = { navController.navigate(Routes.TRASH) }
             )
         }
 
@@ -80,6 +83,13 @@ fun AppNavGraph(
             SettingsScreen(
                 viewModel = settingsViewModel,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.TRASH) {
+            TrashScreen(
+                viewModel = todoViewModel,
+                onBack    = { navController.popBackStack() }
             )
         }
     }

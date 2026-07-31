@@ -126,6 +126,23 @@ private class FakeTodoDataSource(
         todos.removeAll { it.id == todo.id }
     }
 
+    override suspend fun trashTodo(todo: TodoItem): TodoItem {
+        todos.removeAll { it.id == todo.id }
+        val trashed = todo.copy(filePath = "Tasks/.trash/${todo.id}.md")
+        trashed
+        return trashed
+    }
+
+    override suspend fun restoreTodo(todo: TodoItem): TodoItem {
+        val restored = todo.copy(filePath = "Tasks/${todo.id}.md")
+        todos += restored
+        return restored
+    }
+
+    override suspend fun getTrashedTodos(): List<TodoItem> = emptyList()
+
+    override suspend fun purgeOldTrash(): Int = 0
+
     override suspend fun pull(): GitRepository.GitResult = pullResult
 
     override suspend fun push(message: String): GitRepository.GitResult = pushResult

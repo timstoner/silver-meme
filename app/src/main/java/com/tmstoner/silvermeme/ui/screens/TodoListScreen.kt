@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
@@ -84,7 +85,8 @@ fun TodoListScreen(
     viewModel: TodoViewModel,
     onAddTodo: () -> Unit,
     onEditTodo: (TodoItem) -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onOpenTrash: () -> Unit
 ) {
     val uiState           by viewModel.uiState.collectAsStateWithLifecycle()
     val filterState       by viewModel.filterState.collectAsStateWithLifecycle()
@@ -95,7 +97,6 @@ fun TodoListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
 
-    var showDeleteDialog   by remember { mutableStateOf<TodoItem?>(null) }
     var showFilterPanel    by remember { mutableStateOf(false) }
     var showSortMenu       by remember { mutableStateOf(false) }
     var showSearchBar      by remember { mutableStateOf(false) }
@@ -208,6 +209,17 @@ fun TodoListScreen(
                     onClick  = {
                         viewModel.resetFilters()
                         scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                NavigationDrawerItem(
+                    label    = { Text("Trash") },
+                    icon     = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                    selected = false,
+                    onClick  = {
+                        scope.launch { drawerState.close() }
+                        onOpenTrash()
                     },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
@@ -404,7 +416,23 @@ fun TodoListScreen(
                                         todo             = todo,
                                         onToggleComplete = { viewModel.toggleComplete(it) },
                                         onClick          = { onEditTodo(it) },
-                                        onLongClick      = { showDeleteDialog = it },
+                                        onLongClick      = { target ->
+                                            viewModel.trashTodo(target)
+                                            scope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message          = "\"${target.title}\" moved to trash",
+                                                    actionLabel      = "Undo",
+                                                    withDismissAction = true
+                                                )
+                                                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                                    // Restore using the actual trashed filePath recorded by the VM
+                                                    val trashed = viewModel.trashedTodos.value
+                                                        .firstOrNull { it.id == target.id }
+                                                        ?: return@launch
+                                                    viewModel.restoreTodo(trashed)
+                                                }
+                                            }
+                                        },
                                         modifier         = Modifier.animateItem()
                                     )
                                 }
@@ -427,24 +455,6 @@ fun TodoListScreen(
         }
     }
     } // end ModalNavigationDrawer
-
-    // Delete confirmation dialog
-    showDeleteDialog?.let { todo ->
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            title   = { Text("Delete task?") },
-            text    = { Text("\"${todo.title}\" will be permanently deleted.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteTodo(todo)
-                    showDeleteDialog = null
-                }) { Text("Delete") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) { Text("Cancel") }
-            }
-        )
-    }
 
     // Conflict resolution dialog — shown when a pull/push results in a merge conflict
     if (showConflictDialog) {

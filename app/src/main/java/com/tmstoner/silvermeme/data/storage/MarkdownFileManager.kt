@@ -42,6 +42,9 @@ class MarkdownFileManager(private val vaultDir: File) {
 
     companion object {
         const val TASKS_FOLDER = "Tasks"
+        const val TRASH_FOLDER = "Tasks/.trash"
+        /** Items older than this many days are eligible for auto-purge. */
+        const val TRASH_RETENTION_DAYS = 30L
         val DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val DATETIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
         private const val FRONTMATTER_DELIMITER = "---"
@@ -60,6 +63,7 @@ class MarkdownFileManager(private val vaultDir: File) {
     }
 
     private val tasksDir: File get() = File(vaultDir, TASKS_FOLDER)
+    private val trashDir: File get() = File(vaultDir, TRASH_FOLDER)
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -146,10 +150,94 @@ class MarkdownFileManager(private val vaultDir: File) {
         return saved
     }
 
-    /** Deletes the markdown file backing [todo], if it exists. */
+    /** Hard-deletes the markdown file backing [todo]. Prefer [trashTodo] for user-initiated deletes. */
     fun deleteTodo(todo: TodoItem) {
         if (todo.filePath.isBlank()) return
         File(vaultDir, todo.filePath).takeIf { it.exists() }?.delete()
+    }
+
+    /**
+     * Moves [todo]'s backing file to [TRASH_FOLDER], preserving its relative project sub-path.
+     * Returns the updated [TodoItem] with a [TodoItem.filePath] pointing to the trash location,
+     * or the original [todo] unchanged if the source file doesn't exist.
+     */
+    fun trashTodo(todo: TodoItem): TodoItem {
+        if (todo.filePath.isBlank()) return todo
+        val sourceFile = File(vaultDir, todo.filePath)
+        if (!sourceFile.exists()) return todo
+
+        // Mirror sub-path under .trash — e.g. Tasks/Work/Report.md → Tasks/.trash/Work/Report.md
+        val subPath = todo.filePath.removePrefix("$TASKS_FOLDER/")
+        val destFile = File(trashDir, subPath)
+        destFile.parentFile?.mkdirs()
+
+        // Avoid name collision in trash by appending a timestamp suffix if needed.
+        val finalDest = if (destFile.exists()) {
+            val ts = System.currentTimeMillis()
+            File(destFile.parentFile, "${destFile.nameWithoutExtension}-$ts.${destFile.extension}")
+        } else destFile
+
+        sourceFile.renameTo(finalDest)
+        val newRelativePath = finalDest.relativeTo(vaultDir).path.replace('\\', '/')
+        return todo.copy(filePath = newRelativePath, updatedAt = java.time.LocalDateTime.now())
+    }
+
+    /**
+     * Moves a trashed [todo] back to its original location under [TASKS_FOLDER].
+     * Returns the restored [TodoItem] with the updated [TodoItem.filePath].
+     */
+    fun restoreTodo(todo: TodoItem): TodoItem {
+        if (todo.filePath.isBlank()) return todo
+        val sourceFile = File(vaultDir, todo.filePath)
+        if (!sourceFile.exists()) return todo
+
+        // Reconstruct the original Tasks/ path from the .trash sub-path.
+        val subPath = todo.filePath.removePrefix("$TRASH_FOLDER/")
+        val destFile = File(tasksDir, subPath)
+        destFile.parentFile?.mkdirs()
+
+        val finalDest = if (destFile.exists()) {
+            val ts = System.currentTimeMillis()
+            File(destFile.parentFile, "${destFile.nameWithoutExtension}-restored-$ts.${destFile.extension}")
+        } else destFile
+
+        sourceFile.renameTo(finalDest)
+        val newRelativePath = finalDest.relativeTo(vaultDir).path.replace('\\', '/')
+        return todo.copy(filePath = newRelativePath, updatedAt = java.time.LocalDateTime.now())
+    }
+
+    /** Returns all [TodoItem]s currently in the trash folder. */
+    fun getTrashedTodos(): List<TodoItem> {
+        if (!trashDir.exists()) return emptyList()
+        return getAllMarkdownFiles(trashDir).mapNotNull { parseMarkdownFile(it) }
+    }
+
+    /**
+     * Hard-deletes all trash items whose [TodoItem.updatedAt] (the date they were trashed)
+     * is older than [TRASH_RETENTION_DAYS] days.
+     * @return the number of files purged.
+     */
+    fun purgeOldTrash(): Int {
+        if (!trashDir.exists()) return 0
+        val cutoff = java.time.LocalDateTime.now().minusDays(TRASH_RETENTION_DAYS)
+        var count = 0
+        getAllMarkdownFiles(trashDir).forEach { file ->
+            val item = parseMarkdownFile(file) ?: return@forEach
+            if (item.updatedAt.isBefore(cutoff)) {
+                file.delete()
+                count++
+            }
+        }
+        // Remove empty directories left behind.
+        cleanEmptyDirs(trashDir)
+        return count
+    }
+
+    private fun cleanEmptyDirs(dir: File) {
+        dir.listFiles()?.filter { it.isDirectory }?.forEach { sub ->
+            cleanEmptyDirs(sub)
+            if (sub.list()?.isEmpty() == true) sub.delete()
+        }
     }
 
     // ── Parsing ───────────────────────────────────────────────────────────────

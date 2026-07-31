@@ -72,6 +72,32 @@ class TodoRepository(
         syncIfConfigured()
     }
 
+    /** Moves [todo] to trash (Tasks/.trash/) and syncs. Returns updated item with new filePath. */
+    override suspend fun trashTodo(todo: TodoItem): TodoItem = withContext(Dispatchers.IO) {
+        val trashed = markdownFileManager().trashTodo(todo)
+        syncIfConfigured()
+        trashed
+    }
+
+    /** Moves a trashed todo back to Tasks/ and syncs. Returns restored item. */
+    override suspend fun restoreTodo(todo: TodoItem): TodoItem = withContext(Dispatchers.IO) {
+        val restored = markdownFileManager().restoreTodo(todo)
+        syncIfConfigured()
+        restored
+    }
+
+    /** Returns all items currently in Tasks/.trash/. */
+    override suspend fun getTrashedTodos(): List<TodoItem> = withContext(Dispatchers.IO) {
+        markdownFileManager().getTrashedTodos()
+    }
+
+    /** Purges trash items older than 30 days; returns count deleted. */
+    override suspend fun purgeOldTrash(): Int = withContext(Dispatchers.IO) {
+        val count = markdownFileManager().purgeOldTrash()
+        if (count > 0) syncIfConfigured()
+        count
+    }
+
     // ── Git sync ──────────────────────────────────────────────────────────────
 
     /**
