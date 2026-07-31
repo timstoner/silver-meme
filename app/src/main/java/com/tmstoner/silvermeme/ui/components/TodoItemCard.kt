@@ -54,7 +54,9 @@ fun TodoItemCard(
     onToggleComplete: (TodoItem) -> Unit,
     onClick: (TodoItem) -> Unit,
     onLongClick: (TodoItem) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isSelected: Boolean = false,
+    onSelectionToggle: (() -> Unit)? = null
 ) {
     val today   = LocalDate.now()
     val overdue = !todo.isCompleted && todo.dueDate != null && todo.dueDate.isBefore(today)
@@ -63,14 +65,21 @@ fun TodoItemCard(
         modifier = modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick     = { onClick(todo) },
+                onClick     = { 
+                    if (onSelectionToggle != null) {
+                        onSelectionToggle()
+                    } else {
+                        onClick(todo)
+                    }
+                },
                 onLongClick = { onLongClick(todo) }
             ),
         colors = CardDefaults.cardColors(
-            containerColor = if (todo.isCompleted)
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            else
-                MaterialTheme.colorScheme.surface
+            containerColor = when {
+                isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                todo.isCompleted -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                else -> MaterialTheme.colorScheme.surface
+            }
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (todo.isCompleted) 0.dp else 2.dp)
     ) {

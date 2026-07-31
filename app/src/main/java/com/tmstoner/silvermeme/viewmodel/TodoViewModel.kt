@@ -31,6 +31,11 @@ class TodoViewModel(private val repository: TodoDataSource) : ViewModel() {
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
+    // ── Selection state for bulk actions (Track B2) ────────────────────────────
+
+    private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedIds: StateFlow<Set<String>> = _selectedIds.asStateFlow()
+
     // ── Filter / sort ─────────────────────────────────────────────────────────
 
     private val _filterState = MutableStateFlow(FilterState())
@@ -70,6 +75,9 @@ class TodoViewModel(private val repository: TodoDataSource) : ViewModel() {
                 is GitRepository.GitResult.Error -> {
                     _syncState.value = SyncState.Failure(result.message)
                 }
+                is GitRepository.GitResult.Conflict -> {
+                    _syncState.value = SyncState.Conflict(result.files)
+                }
             }
         }
     }
@@ -81,6 +89,7 @@ class TodoViewModel(private val repository: TodoDataSource) : ViewModel() {
             when (val result = repository.push(message)) {
                 is GitRepository.GitResult.Success -> _syncState.value = SyncState.Success("Push complete")
                 is GitRepository.GitResult.Error   -> _syncState.value = SyncState.Failure(result.message)
+                is GitRepository.GitResult.Conflict -> _syncState.value = SyncState.Conflict(result.files)
             }
         }
     }
@@ -164,6 +173,22 @@ class TodoViewModel(private val repository: TodoDataSource) : ViewModel() {
             }
     }
 
+    // ── Selection methods (Track B2 - Bulk actions) ────────────────────────────
+
+    fun toggleSelection(todoId: String) {
+        _selectedIds.update { current ->
+            if (current.contains(todoId)) current - todoId else current + todoId
+        }
+    }
+
+    fun clearSelection() {
+        _selectedIds.value = emptySet()
+    }
+
+    fun selectAll() {
+        _selectedIds.value = uiState.value.todos.map { it.id }.toSet()
+    }
+
     // ── Factory ───────────────────────────────────────────────────────────────
 
     class Factory(private val repository: TodoDataSource) : ViewModelProvider.Factory {
@@ -223,4 +248,5 @@ sealed class SyncState {
     data class Syncing(val message: String) : SyncState()
     data class Success(val message: String) : SyncState()
     data class Failure(val message: String) : SyncState()
+    data class Conflict(val files: List<String>) : SyncState()
 }

@@ -23,6 +23,7 @@ class GitRepository {
     sealed class GitResult {
         object Success : GitResult()
         data class Error(val message: String, val cause: Throwable? = null) : GitResult()
+        data class Conflict(val files: List<String>) : GitResult()
     }
 
     // ── Clone ─────────────────────────────────────────────────────────────────
@@ -89,7 +90,14 @@ class GitRepository {
             return if (result.isSuccessful) {
                 GitResult.Success
             } else {
-                GitResult.Error("Pull completed with conflicts")
+                // Detect conflicting files from status
+                val status = git.status().call()
+                val conflictingFiles = (status.conflicting + status.added + status.changed).toList()
+                if (conflictingFiles.isNotEmpty()) {
+                    GitResult.Conflict(conflictingFiles)
+                } else {
+                    GitResult.Error("Pull completed with conflicts")
+                }
             }
         }
     }
