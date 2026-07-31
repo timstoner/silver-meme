@@ -160,13 +160,7 @@ class MarkdownFileManagerTest {
         val md = manager.serializeToMarkdown(original)
         val parsed = manager.parseMarkdownFile(createTempMd(md, "buy-groceries"))!!
 
-        assertEquals(original.id, parsed.id)
-        assertEquals(original.title, parsed.title)
-        assertEquals(original.priority, parsed.priority)
-        assertEquals(original.dueDate, parsed.dueDate)
-        assertEquals(original.location, parsed.location)
-        assertEquals(original.tags, parsed.tags)
-        assertEquals(original.isCompleted, parsed.isCompleted)
+        assertTodoRoundTrip(original, parsed)
         assertTrue(parsed.content.contains("Don't forget the reusable bags"))
     }
 

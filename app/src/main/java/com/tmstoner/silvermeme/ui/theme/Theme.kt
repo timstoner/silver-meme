@@ -14,21 +14,20 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = androidx.compose.ui.graphics.Color(0xFFD0BCFF),
+    secondary = androidx.compose.ui.graphics.Color(0xFFCCC2DC),
+    tertiary = androidx.compose.ui.graphics.Color(0xFFEFB8C8)
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary = androidx.compose.ui.graphics.Color(0xFF6650A4),
+    secondary = androidx.compose.ui.graphics.Color(0xFF625B71),
+    tertiary = androidx.compose.ui.graphics.Color(0xFF7D5260)
 )
 
 @Composable
-fun SilverMemeTheme(
+fun SilvermemeTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
@@ -53,7 +52,7 @@ fun SilverMemeTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography   = Typography,
+        typography   = AppTypography,
         content      = content
     )
 }

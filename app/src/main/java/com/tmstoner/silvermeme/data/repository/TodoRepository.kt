@@ -3,13 +3,9 @@ package com.tmstoner.silvermeme.data.repository
 import android.content.Context
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
-import com.tmstoner.silvermeme.data.storage.SettingsDataStore
+import com.tmstoner.silvermeme.data.storage.SettingsStore
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -20,9 +16,9 @@ import java.io.File
  */
 class TodoRepository(
     private val context: Context,
-    private val settings: SettingsDataStore,
+    private val settings: SettingsStore,
     private val gitRepository: GitRepository = GitRepository()
-) {
+) : TodoDataSource {
 
     // ── Vault directory resolution ────────────────────────────────────────────
 
@@ -51,7 +47,7 @@ class TodoRepository(
     // ── Read ──────────────────────────────────────────────────────────────────
 
     /** Returns all TODO items found in the local vault as a one-shot list. */
-    suspend fun getTodos(): List<TodoItem> = withContext(Dispatchers.IO) {
+    override suspend fun getTodos(): List<TodoItem> = withContext(Dispatchers.IO) {
         markdownFileManager().getAllTodos()
     }
 
@@ -63,7 +59,7 @@ class TodoRepository(
      *
      * @return The saved [TodoItem] with an updated [TodoItem.filePath].
      */
-    suspend fun saveTodo(todo: TodoItem): TodoItem = withContext(Dispatchers.IO) {
+    override suspend fun saveTodo(todo: TodoItem): TodoItem = withContext(Dispatchers.IO) {
         val manager = markdownFileManager()
         val saved = manager.saveTodo(todo)
         syncIfConfigured()
@@ -71,7 +67,7 @@ class TodoRepository(
     }
 
     /** Deletes [todo] and (if git is configured) commits and pushes the deletion. */
-    suspend fun deleteTodo(todo: TodoItem) = withContext(Dispatchers.IO) {
+    override suspend fun deleteTodo(todo: TodoItem) = withContext(Dispatchers.IO) {
         markdownFileManager().deleteTodo(todo)
         syncIfConfigured()
     }
@@ -84,7 +80,7 @@ class TodoRepository(
      * If no remote URL is configured the operation is skipped and a success
      * result is returned to avoid surfacing errors to the user.
      */
-    suspend fun pull(): GitRepository.GitResult = withContext(Dispatchers.IO) {
+    override suspend fun pull(): GitRepository.GitResult = withContext(Dispatchers.IO) {
         val remoteUrl = settings.gitRemoteUrl.first()
         if (remoteUrl.isBlank()) return@withContext GitRepository.GitResult.Success
 
@@ -99,7 +95,7 @@ class TodoRepository(
      * Commits and pushes all local changes to the remote repository.
      * No-op if git is not configured.
      */
-    suspend fun push(message: String = "Update todos"): GitRepository.GitResult =
+    override suspend fun push(message: String): GitRepository.GitResult =
         withContext(Dispatchers.IO) {
             val remoteUrl   = settings.gitRemoteUrl.first()
             if (remoteUrl.isBlank()) return@withContext GitRepository.GitResult.Success

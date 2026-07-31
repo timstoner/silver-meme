@@ -4,6 +4,7 @@ import android.app.Application
 import com.tmstoner.silvermeme.data.repository.GitRepository
 import com.tmstoner.silvermeme.data.repository.TodoRepository
 import com.tmstoner.silvermeme.data.storage.SettingsDataStore
+import com.tmstoner.silvermeme.notifications.NotificationScheduler
 
 /**
  * Application class that acts as a simple service locator.
@@ -21,5 +22,9 @@ class SilverMemeApplication : Application() {
             settings      = settingsDataStore,
             gitRepository = GitRepository()
         )
+    }
+
+    val notificationScheduler: NotificationScheduler by lazy {
+        NotificationScheduler(applicationContext)
     }
 }

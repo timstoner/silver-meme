@@ -17,7 +17,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
  * Settings include the git remote configuration needed to clone/pull/push the
  * vault repository, plus the local path where the vault is stored on device.
  */
-class SettingsDataStore(private val context: Context) {
+class SettingsDataStore(private val context: Context) : SettingsStore {
 
     companion object {
         private val KEY_GIT_REMOTE_URL = stringPreferencesKey("git_remote_url")
@@ -30,43 +30,49 @@ class SettingsDataStore(private val context: Context) {
 
     // ── Flows (reactive reads) ────────────────────────────────────────────────
 
-    val gitRemoteUrl: Flow<String> = context.dataStore.data
+    override val gitRemoteUrl: Flow<String> = context.dataStore.data
         .map { it[KEY_GIT_REMOTE_URL] ?: "" }
 
-    val gitUsername: Flow<String> = context.dataStore.data
+    override val gitUsername: Flow<String> = context.dataStore.data
         .map { it[KEY_GIT_USERNAME] ?: "" }
 
-    val gitToken: Flow<String> = context.dataStore.data
+    override val gitToken: Flow<String> = context.dataStore.data
         .map { it[KEY_GIT_TOKEN] ?: "" }
 
-    val vaultPath: Flow<String> = context.dataStore.data
+    override val vaultPath: Flow<String> = context.dataStore.data
         .map { it[KEY_VAULT_PATH] ?: "" }
 
-    val authorName: Flow<String> = context.dataStore.data
+    override val authorName: Flow<String> = context.dataStore.data
         .map { it[KEY_AUTHOR_NAME] ?: "SilverMeme" }
 
-    val authorEmail: Flow<String> = context.dataStore.data
+    override val authorEmail: Flow<String> = context.dataStore.data
         .map { it[KEY_AUTHOR_EMAIL] ?: "silvermeme@local" }
 
     // ── Writes ────────────────────────────────────────────────────────────────
 
-    suspend fun setGitRemoteUrl(url: String) =
+    override suspend fun setGitRemoteUrl(url: String) {
         context.dataStore.edit { it[KEY_GIT_REMOTE_URL] = url }
+    }
 
-    suspend fun setGitUsername(username: String) =
+    override suspend fun setGitUsername(username: String) {
         context.dataStore.edit { it[KEY_GIT_USERNAME] = username }
+    }
 
-    suspend fun setGitToken(token: String) =
+    override suspend fun setGitToken(token: String) {
         context.dataStore.edit { it[KEY_GIT_TOKEN] = token }
+    }
 
-    suspend fun setVaultPath(path: String) =
+    override suspend fun setVaultPath(path: String) {
         context.dataStore.edit { it[KEY_VAULT_PATH] = path }
+    }
 
-    suspend fun setAuthorName(name: String) =
+    override suspend fun setAuthorName(name: String) {
         context.dataStore.edit { it[KEY_AUTHOR_NAME] = name }
+    }
 
-    suspend fun setAuthorEmail(email: String) =
+    override suspend fun setAuthorEmail(email: String) {
         context.dataStore.edit { it[KEY_AUTHOR_EMAIL] = email }
+    }
 
     /** Returns a snapshot of all settings (non-reactive, for one-shot reads). */
     data class Snapshot(

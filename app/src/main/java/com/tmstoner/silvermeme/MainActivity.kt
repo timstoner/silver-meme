@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
 import com.tmstoner.silvermeme.ui.navigation.AppNavGraph
-import com.tmstoner.silvermeme.ui.theme.SilverMemeTheme
+import com.tmstoner.silvermeme.ui.theme.SilvermemeTheme
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 
@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
         val app = application as SilverMemeApplication
 
         setContent {
-            SilverMemeTheme {
+            SilvermemeTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color    = MaterialTheme.colorScheme.background

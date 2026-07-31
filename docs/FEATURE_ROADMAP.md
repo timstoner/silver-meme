@@ -223,6 +223,7 @@ plus the relevant editor UI in `TodoDetailScreen.kt` and display in
   "auto-push on write" behavior.
 - **Owns:** new `sync/SyncWorker.kt`, `SettingsDataStore.kt` (new toggle key),
   `SettingsScreen.kt` (new switch).
+  `SettingsScreen.kt` (new switch).
 
 ### G2. Multi-vault support
 - Allow switching between multiple git-backed vaults.

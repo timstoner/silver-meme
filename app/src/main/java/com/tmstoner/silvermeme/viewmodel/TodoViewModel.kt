@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.repository.GitRepository
-import com.tmstoner.silvermeme.data.repository.TodoRepository
+import com.tmstoner.silvermeme.data.repository.TodoDataSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +21,7 @@ import java.time.LocalDate
  *  - [uiState]   – the current [TodoUiState] consumed by Compose screens
  *  - [syncState] – status of background git sync operations
  */
-class TodoViewModel(private val repository: TodoRepository) : ViewModel() {
+class TodoViewModel(private val repository: TodoDataSource) : ViewModel() {
 
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -147,7 +147,7 @@ class TodoViewModel(private val repository: TodoRepository) : ViewModel() {
             .filter { todo ->
                 (filter.showCompleted || !todo.isCompleted) &&
                 (filter.priority == null || todo.priority == filter.priority) &&
-                (!filter.showOverdue || (todo.dueDate != null && todo.dueDate.isBefore(today))) &&
+                (!filter.showOverdue || (todo.dueDate?.isBefore(today) == true)) &&
                 (filter.searchQuery.isBlank() ||
                     todo.title.contains(filter.searchQuery, ignoreCase = true) ||
                     todo.content.contains(filter.searchQuery, ignoreCase = true) ||
@@ -166,7 +166,7 @@ class TodoViewModel(private val repository: TodoRepository) : ViewModel() {
 
     // ── Factory ───────────────────────────────────────────────────────────────
 
-    class Factory(private val repository: TodoRepository) : ViewModelProvider.Factory {
+    class Factory(private val repository: TodoDataSource) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             TodoViewModel(repository) as T
@@ -179,7 +179,7 @@ class TodoViewModel(private val repository: TodoRepository) : ViewModel() {
                 a.dueDate == null && b.dueDate == null -> 0
                 a.dueDate == null -> 1
                 b.dueDate == null -> -1
-                else -> a.dueDate.compareTo(b.dueDate)
+                else -> a.dueDate!!.compareTo(b.dueDate!!)
             }
         }
         private val DUE_DESC: Comparator<TodoItem> = Comparator { a, b ->
@@ -187,7 +187,7 @@ class TodoViewModel(private val repository: TodoRepository) : ViewModel() {
                 a.dueDate == null && b.dueDate == null -> 0
                 a.dueDate == null -> 1
                 b.dueDate == null -> -1
-                else -> b.dueDate.compareTo(a.dueDate)
+                else -> b.dueDate!!.compareTo(a.dueDate!!)
             }
         }
     }
