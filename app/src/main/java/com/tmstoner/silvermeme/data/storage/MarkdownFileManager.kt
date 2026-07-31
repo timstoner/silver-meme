@@ -51,25 +51,47 @@ class MarkdownFileManager(private val vaultDir: File) {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    /** Returns all TODO items found in the Tasks folder. */
+    /** Returns all TODO items found in the Tasks folder and subfolders (Track E3). */
     fun getAllTodos(): List<TodoItem> {
         if (!tasksDir.exists()) return emptyList()
-        return tasksDir
-            .listFiles { f -> f.isFile && f.extension == "md" }
-            ?.mapNotNull { parseMarkdownFile(it) }
-            ?: emptyList()
+        return getAllMarkdownFiles(tasksDir)
+            .mapNotNull { parseMarkdownFile(it) }
+    }
+    
+    /** Recursively finds all .md files in a directory and subdirectories (Track E3). */
+    private fun getAllMarkdownFiles(dir: File): List<File> {
+        val files = mutableListOf<File>()
+        dir.listFiles()?.forEach { file ->
+            when {
+                file.isFile && file.extension == "md" -> files.add(file)
+                file.isDirectory -> files.addAll(getAllMarkdownFiles(file))
+            }
+        }
+        return files
     }
 
     /**
      * Persists [todo] to its backing markdown file.
      * The filename is derived from [TodoItem.title]; if the item was already
      * backed by a different file (title changed), the old file is removed.
+     * Project folders can be specified by passing a custom filePath (Track E3).
      */
     fun saveTodo(todo: TodoItem): TodoItem {
         if (!tasksDir.exists()) tasksDir.mkdirs()
 
         val newFilename = "${sanitizeFilename(todo.title)}.md"
-        val newFile = File(tasksDir, newFilename)
+        
+        // Support custom file paths with project folders (Track E3)
+        val newFile = if (todo.filePath.isNotBlank() && todo.filePath.contains("/")) {
+            // If filePath is set with folders, use it as-is
+            File(vaultDir, todo.filePath)
+        } else {
+            // Default: save to Tasks/ root
+            File(tasksDir, newFilename)
+        }
+        
+        // Ensure parent directory exists
+        newFile.parentFile?.mkdirs()
 
         // Remove old file if the title (and therefore filename) changed
         if (todo.filePath.isNotBlank()) {
@@ -79,7 +101,12 @@ class MarkdownFileManager(private val vaultDir: File) {
             }
         }
 
-        val relativePath = "$TASKS_FOLDER/$newFilename"
+        val relativePath = if (todo.filePath.isNotBlank() && todo.filePath.contains("/")) {
+            todo.filePath
+        } else {
+            "$TASKS_FOLDER/$newFilename"
+        }
+        
         val saved = todo.copy(filePath = relativePath, updatedAt = LocalDateTime.now())
         newFile.writeText(serializeToMarkdown(saved))
         return saved

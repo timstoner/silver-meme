@@ -168,6 +168,9 @@ class TodoViewModel(private val repository: TodoDataSource) : ViewModel() {
 
     fun setSearchQuery(query: String) =
         _filterState.update { it.copy(searchQuery = query) }
+    
+    fun setFilterProject(project: String?) =
+        _filterState.update { it.copy(project = project) }
 
     /** Applies the current [FilterState] to [TodoUiState.todos]. */
     fun filteredTodos(): List<TodoItem> {
@@ -180,6 +183,7 @@ class TodoViewModel(private val repository: TodoDataSource) : ViewModel() {
                 (filter.showCompleted || !todo.isCompleted) &&
                 (filter.priority == null || todo.priority == filter.priority) &&
                 (!filter.showOverdue || (todo.dueDate?.isBefore(today) == true)) &&
+                (filter.project == null || todo.project == filter.project) &&
                 (filter.searchQuery.isBlank() ||
                     todo.title.contains(filter.searchQuery, ignoreCase = true) ||
                     todo.content.contains(filter.searchQuery, ignoreCase = true) ||
@@ -255,7 +259,8 @@ data class FilterState(
     val showCompleted: Boolean = false,
     val showOverdue: Boolean = false,
     val searchQuery: String = "",
-    val sortOrder: SortOrder = SortOrder.DUE_DATE_ASC
+    val sortOrder: SortOrder = SortOrder.DUE_DATE_ASC,
+    val project: String? = null
 )
 
 enum class SortOrder(val label: String) {

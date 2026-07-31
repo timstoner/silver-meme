@@ -42,7 +42,7 @@ data class TodoItem(
     val isCompleted: Boolean = false,
     /**
      * Path of the backing markdown file relative to the vault root.
-     * Example: "Tasks/Buy groceries.md"
+     * Example: "Tasks/Buy groceries.md" or "Tasks/Home/Buy groceries.md"
      */
     val filePath: String = "",
     val createdAt: LocalDateTime = LocalDateTime.now(),
@@ -54,6 +54,15 @@ data class TodoItem(
 ) {
     /** Returns a copy marked as complete/incomplete. */
     fun withCompletion(completed: Boolean) = copy(isCompleted = completed, updatedAt = LocalDateTime.now())
+    
+    /** Derives the project folder from filePath (Track E3). Empty string for root-level Tasks. */
+    val project: String get() {
+        val parts = filePath.split(Regex("""[\\/]"""))
+        return when {
+            parts.size > 2 -> parts.subList(1, parts.size - 1).joinToString("/")
+            else -> ""
+        }
+    }
 }
 
 /** A single checklist item within a TodoItem. */
