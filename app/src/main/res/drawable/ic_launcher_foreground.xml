@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <!-- Checkmark / tick icon representing a todo app -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M40,54 L50,64 L68,46"
+      android:strokeColor="#FFFFFF"
+      android:strokeWidth="6"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round" />
+  <path
+      android:fillColor="@android:color/transparent"
+      android:strokeColor="#FFFFFF"
+      android:strokeWidth="4"
+      android:pathData="M30,35 L30,73 Q30,78 35,78 L73,78 Q78,78 78,73 L78,35 Q78,30 73,30 L35,30 Q30,30 30,35 Z" />
+</vector>
