@@ -1,5 +1,6 @@
 package com.tmstoner.silvermeme.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Folder
@@ -23,7 +26,9 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.AlertDialog
@@ -93,6 +98,9 @@ fun TodoListScreen(
     val syncState         by viewModel.syncState.collectAsStateWithLifecycle()
     val groups            by viewModel.visibleGroups.collectAsStateWithLifecycle()
     val availableProjects by viewModel.availableProjects.collectAsStateWithLifecycle()
+    val selectedIds       by viewModel.selectedIds.collectAsStateWithLifecycle()
+
+    val isSelecting = selectedIds.isNotEmpty()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
@@ -103,8 +111,14 @@ fun TodoListScreen(
     var searchQuery        by remember { mutableStateOf("") }
     var showConflictDialog by remember { mutableStateOf(false) }
     var conflictFiles      by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showPriorityMenu   by remember { mutableStateOf(false) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+
+    // Exit selection mode on back press
+    BackHandler(enabled = isSelecting) {
+        viewModel.clearSelection()
+    }
 
     // Transparent resync: pull from remote automatically when the list screen
     // is first shown, so the user never has to tap the manual sync button just
@@ -229,6 +243,71 @@ fun TodoListScreen(
     Scaffold(
         topBar = {
             Column {
+                if (isSelecting) {
+                    // Contextual top bar for bulk selection
+                    TopAppBar(
+                        title  = { Text("${selectedIds.size} selected") },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor    = MaterialTheme.colorScheme.secondaryContainer,
+                            titleContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        navigationIcon = {
+                            IconButton(onClick = { viewModel.clearSelection() }) {
+                                Icon(Icons.Filled.Close, contentDescription = "Exit selection")
+                            }
+                        },
+                        actions = {
+                            // Select all
+                            IconButton(onClick = { viewModel.selectAll() }) {
+                                Icon(Icons.Filled.SelectAll, contentDescription = "Select all")
+                            }
+                            // Mark complete
+                            IconButton(onClick = {
+                                viewModel.bulkComplete()
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Marked ${selectedIds.size} as complete")
+                                }
+                            }) {
+                                Icon(Icons.Filled.CheckCircle, contentDescription = "Mark complete")
+                            }
+                            // Set priority
+                            Box {
+                                IconButton(onClick = { showPriorityMenu = true }) {
+                                    Icon(Icons.Filled.SwapVert, contentDescription = "Set priority")
+                                }
+                                DropdownMenu(
+                                    expanded = showPriorityMenu,
+                                    onDismissRequest = { showPriorityMenu = false }
+                                ) {
+                                    Text(
+                                        "Set priority",
+                                        style    = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                    )
+                                    Priority.entries.forEach { p ->
+                                        DropdownMenuItem(
+                                            text    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) },
+                                            onClick = {
+                                                showPriorityMenu = false
+                                                viewModel.bulkSetPriority(p)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            // Trash selection
+                            IconButton(onClick = {
+                                val count = selectedIds.size
+                                viewModel.bulkTrash()
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("$count items moved to trash")
+                                }
+                            }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Move to trash")
+                            }
+                        }
+                    )
+                } else {
                 TopAppBar(
                     title  = { Text(stringResource(R.string.app_name)) },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -302,9 +381,10 @@ fun TodoListScreen(
                         }
                     }
                 )
+                } // end else (normal top bar)
 
                 // Search bar
-                AnimatedVisibility(visible = showSearchBar) {
+                AnimatedVisibility(visible = showSearchBar && !isSelecting) {
                     SearchBar(
                         query         = searchQuery,
                         onQueryChange = { q -> searchQuery = q; viewModel.onSearchInput(q) },
@@ -414,25 +494,27 @@ fun TodoListScreen(
                                 ) { todo ->
                                     TodoItemCard(
                                         todo             = todo,
-                                        onToggleComplete = { viewModel.toggleComplete(it) },
-                                        onClick          = { onEditTodo(it) },
-                                        onLongClick      = { target ->
-                                            viewModel.trashTodo(target)
-                                            scope.launch {
-                                                val result = snackbarHostState.showSnackbar(
-                                                    message          = "\"${target.title}\" moved to trash",
-                                                    actionLabel      = "Undo",
-                                                    withDismissAction = true
-                                                )
-                                                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                                    // Restore using the actual trashed filePath recorded by the VM
-                                                    val trashed = viewModel.trashedTodos.value
-                                                        .firstOrNull { it.id == target.id }
-                                                        ?: return@launch
-                                                    viewModel.restoreTodo(trashed)
-                                                }
+                                        onToggleComplete = { if (!isSelecting) viewModel.toggleComplete(it) },
+                                        onClick          = { t ->
+                                            if (isSelecting) {
+                                                viewModel.toggleSelection(t.id)
+                                            } else {
+                                                onEditTodo(t)
                                             }
                                         },
+                                        onLongClick      = { target ->
+                                            if (isSelecting) {
+                                                // Already in selection mode — treat as toggle
+                                                viewModel.toggleSelection(target.id)
+                                            } else {
+                                                // Enter selection mode with this item selected
+                                                viewModel.toggleSelection(target.id)
+                                            }
+                                        },
+                                        isSelected       = todo.id in selectedIds,
+                                        onSelectionToggle = if (isSelecting) {
+                                            { viewModel.toggleSelection(todo.id) }
+                                        } else null,
                                         modifier         = Modifier.animateItem()
                                     )
                                 }

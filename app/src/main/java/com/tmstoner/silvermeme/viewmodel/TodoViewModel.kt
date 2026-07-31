@@ -441,6 +441,70 @@ class TodoViewModel(
         _selectedIds.value = uiState.value.todos.map { it.id }.toSet()
     }
 
+    /** Marks all selected todos as complete, then syncs once. Clears selection when done. */
+    fun bulkComplete() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+            try {
+                val ids = _selectedIds.value
+                val updated = _uiState.value.todos
+                    .filter { it.id in ids && !it.isCompleted }
+                    .map { it.withCompletion(true) }
+                if (updated.isNotEmpty()) {
+                    repository.bulkSave(updated)
+                    updated.forEach { notificationScheduler?.cancel(it.id) }
+                    doLoad()
+                }
+                clearSelection()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            } finally {
+                _uiState.update { it.copy(isSaving = false) }
+            }
+        }
+    }
+
+    /** Moves all selected todos to trash, then syncs once. Clears selection when done. */
+    fun bulkTrash() {
+        viewModelScope.launch {
+            try {
+                val ids = _selectedIds.value
+                val targets = _uiState.value.todos.filter { it.id in ids }
+                if (targets.isNotEmpty()) {
+                    repository.bulkTrash(targets)
+                    targets.forEach { notificationScheduler?.cancel(it.id) }
+                    doLoad()
+                    loadTrash()
+                }
+                clearSelection()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    /** Updates priority for all selected todos, then syncs once. Clears selection when done. */
+    fun bulkSetPriority(priority: com.tmstoner.silvermeme.data.model.Priority) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+            try {
+                val ids = _selectedIds.value
+                val updated = _uiState.value.todos
+                    .filter { it.id in ids }
+                    .map { it.copy(priority = priority) }
+                if (updated.isNotEmpty()) {
+                    repository.bulkSave(updated)
+                    doLoad()
+                }
+                clearSelection()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            } finally {
+                _uiState.update { it.copy(isSaving = false) }
+            }
+        }
+    }
+
     // ── Factory ───────────────────────────────────────────────────────────────
 
     class Factory(

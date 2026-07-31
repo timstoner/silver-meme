@@ -13,6 +13,10 @@ interface TodoDataSource {
     suspend fun getTrashedTodos(): List<TodoItem>
     /** Hard-deletes old trash entries; returns count of purged files. */
     suspend fun purgeOldTrash(): Int
+    /** Saves multiple todos in a single batch and syncs once at the end. */
+    suspend fun bulkSave(todos: List<TodoItem>)
+    /** Moves multiple todos to trash in a single batch and syncs once at the end. */
+    suspend fun bulkTrash(todos: List<TodoItem>)
     suspend fun pull(): GitRepository.GitResult
     suspend fun push(message: String = "Update todos"): GitRepository.GitResult
 }

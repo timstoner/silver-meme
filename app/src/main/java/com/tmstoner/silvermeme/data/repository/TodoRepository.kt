@@ -98,6 +98,20 @@ class TodoRepository(
         count
     }
 
+    /** Saves multiple todos in a single batch and syncs once at the end. */
+    override suspend fun bulkSave(todos: List<TodoItem>) = withContext(Dispatchers.IO) {
+        val manager = markdownFileManager()
+        todos.forEach { manager.saveTodo(it, it.filePath.takeIf { p -> p.isNotBlank() }) }
+        syncIfConfigured()
+    }
+
+    /** Moves multiple todos to trash in a single batch and syncs once at the end. */
+    override suspend fun bulkTrash(todos: List<TodoItem>) = withContext(Dispatchers.IO) {
+        val manager = markdownFileManager()
+        todos.forEach { manager.trashTodo(it) }
+        syncIfConfigured()
+    }
+
     // ── Git sync ──────────────────────────────────────────────────────────────
 
     /**

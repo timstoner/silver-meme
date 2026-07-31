@@ -143,6 +143,14 @@ private class FakeTodoDataSource(
 
     override suspend fun purgeOldTrash(): Int = 0
 
+    override suspend fun bulkSave(todos: List<TodoItem>) {
+        todos.forEach { saveTodo(it) }
+    }
+
+    override suspend fun bulkTrash(todos: List<TodoItem>) {
+        todos.forEach { trashTodo(it) }
+    }
+
     override suspend fun pull(): GitRepository.GitResult = pullResult
 
     override suspend fun push(message: String): GitRepository.GitResult = pushResult
