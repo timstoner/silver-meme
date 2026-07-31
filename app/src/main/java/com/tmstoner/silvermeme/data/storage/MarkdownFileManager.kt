@@ -45,6 +45,18 @@ class MarkdownFileManager(private val vaultDir: File) {
         val DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val DATETIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
         private const val FRONTMATTER_DELIMITER = "---"
+
+        /**
+         * Canonical filename sanitizer. Public so callers (e.g. UI screens) can derive
+         * paths that exactly match what [saveTodo] will produce, preventing path mismatches.
+         */
+        fun sanitizeFilename(title: String): String =
+            title
+                .replace(Regex("[/\\\\:*?\"<>|#]"), "_")
+                .trim()
+                .trimEnd('.')
+                .take(150)
+                .ifEmpty { "untitled" }
     }
 
     private val tasksDir: File get() = File(vaultDir, TASKS_FOLDER)
@@ -84,21 +96,41 @@ class MarkdownFileManager(private val vaultDir: File) {
     fun saveTodo(todo: TodoItem, previousFilePath: String? = null): TodoItem {
         if (!tasksDir.exists()) tasksDir.mkdirs()
 
-        val newFilename = "${sanitizeFilename(todo.title)}.md"
-        
-        // Support custom file paths with project folders (Track E3)
-        val newFile = if (todo.filePath.isNotBlank() && todo.filePath.contains("/")) {
-            // If filePath is set with folders, use it as-is
-            File(vaultDir, todo.filePath)
-        } else {
-            // Default: save to Tasks/ root
-            File(tasksDir, newFilename)
-        }
-        
-        // Ensure parent directory exists
-        newFile.parentFile?.mkdirs()
+        // Always derive the canonical base name from the title, never trust an
+        // externally-supplied sanitized form (Bug 1 — filename sanitizer mismatch).
+        val sanitizedTitle = sanitizeFilename(todo.title)
 
-        // Remove old file if the title/project (and therefore path) changed
+        // Determine the parent directory: extract it from filePath if it carries a
+        // project sub-path, otherwise default to tasksDir.
+        val parentDir: File = if (todo.filePath.isNotBlank() && todo.filePath.contains("/")) {
+            // e.g. "Tasks/Work/Report.md" → parent is "<vault>/Tasks/Work"
+            File(vaultDir, todo.filePath).parentFile ?: tasksDir
+        } else {
+            tasksDir
+        }
+        parentDir.mkdirs()
+
+        // Candidate file using the canonical name.
+        val candidateFile = File(parentDir, "$sanitizedTitle.md")
+
+        // Bug 3 — collision avoidance: if the candidate file already exists and
+        // belongs to a DIFFERENT id, append the due-date (or current date) suffix
+        // so the new occurrence doesn't overwrite the existing one.
+        val newFile: File = if (candidateFile.exists() && todo.filePath.isBlank()) {
+            val existingId = runCatching {
+                parseFrontmatter(candidateFile.readText())["id"]
+            }.getOrNull()
+            if (existingId != null && existingId != todo.id) {
+                val dateSuffix = (todo.dueDate ?: LocalDate.now()).format(DATE_FORMATTER)
+                File(parentDir, "$sanitizedTitle-$dateSuffix.md")
+            } else {
+                candidateFile
+            }
+        } else {
+            candidateFile
+        }
+
+        // Remove the old backing file when the title/project changed (rename).
         val oldPath = previousFilePath ?: todo.filePath
         if (oldPath.isNotBlank()) {
             val oldFile = File(vaultDir, oldPath)
@@ -107,12 +139,8 @@ class MarkdownFileManager(private val vaultDir: File) {
             }
         }
 
-        val relativePath = if (todo.filePath.isNotBlank() && todo.filePath.contains("/")) {
-            todo.filePath
-        } else {
-            "$TASKS_FOLDER/$newFilename"
-        }
-        
+        val relativePath = newFile.relativeTo(vaultDir).path.replace('\\', '/')
+
         val saved = todo.copy(filePath = relativePath, updatedAt = LocalDateTime.now())
         newFile.writeText(serializeToMarkdown(saved))
         return saved
@@ -142,7 +170,7 @@ class MarkdownFileManager(private val vaultDir: File) {
             val bodyWithoutChecklist = body.replace(Regex("^- \\[[ xX]\\] .*$", RegexOption.MULTILINE), "").trim()
 
             TodoItem(
-                id = frontmatter["id"]?.takeIf { it.isNotBlank() } ?: file.nameWithoutExtension,
+                id = frontmatter["id"]?.takeIf { it.isNotBlank() } ?: relativePath,
                 title = frontmatter["title"]?.takeIf { it.isNotBlank() } ?: file.nameWithoutExtension,
                 content = bodyWithoutChecklist,
                 dueDate = parseDate(frontmatter["due"]),
@@ -285,15 +313,6 @@ class MarkdownFileManager(private val vaultDir: File) {
 
     private fun fileCreationTime(file: File): LocalDateTime =
         try { LocalDateTime.now() } catch (_: Exception) { LocalDateTime.now() }
-
-    /** Strips characters not allowed in filenames on common OSes. */
-    internal fun sanitizeFilename(title: String): String =
-        title
-            .replace(Regex("[/\\\\:*?\"<>|#]"), "_")
-            .trim()
-            .trimEnd('.')
-            .take(150)
-            .ifEmpty { "untitled" }
 
     /** Extracts checklist items from markdown body (Track E1). Parses `- [ ]` / `- [x]` syntax. */
     private fun parseChecklistFromBody(body: String): List<ChecklistItem> =

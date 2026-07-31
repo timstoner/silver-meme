@@ -118,8 +118,8 @@ class TodoViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             try {
-                repository.saveTodo(todo, previousFilePath)
-                loadTodos()
+                doSave(todo, previousFilePath)
+                doLoad()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             } finally {
@@ -128,24 +128,44 @@ class TodoViewModel(
         }
     }
 
+    /** Suspending save — for use inside coroutines that need sequencing. */
+    private suspend fun doSave(todo: TodoItem, previousFilePath: String? = null) {
+        repository.saveTodo(todo, previousFilePath)
+    }
+
+    /** Suspending load — for use inside coroutines that need sequencing. */
+    private suspend fun doLoad() {
+        val todos = repository.getTodos()
+        _uiState.update { it.copy(todos = todos, isLoading = false) }
+    }
+
     fun toggleComplete(todo: TodoItem) {
         viewModelScope.launch {
-            // Mark current task as complete
-            saveTodo(todo.withCompletion(!todo.isCompleted))
+            _uiState.update { it.copy(isSaving = true) }
+            try {
+                val completed = todo.withCompletion(!todo.isCompleted)
+                doSave(completed, completed.filePath.takeIf { it.isNotBlank() })
 
-            // If marking complete and recurrence is set, spawn next occurrence (Track E2)
-            if (!todo.isCompleted && todo.recurrence != "none" && todo.dueDate != null) {
-                val nextDueDate = RecurrenceRule.parse(todo.recurrence).nextDueDate(todo.dueDate!!)
-
-                if (nextDueDate != null) {
-                    val nextOccurrence = todo.copy(
-                        id = java.util.UUID.randomUUID().toString(),
-                        isCompleted = false,
-                        dueDate = nextDueDate,
-                        updatedAt = java.time.LocalDateTime.now()
-                    )
-                    saveTodo(nextOccurrence)
+                // If marking complete and recurrence is set, spawn next occurrence (Track E2).
+                // Bug 3/4 fix: clear filePath so storage derives a fresh, collision-safe filename.
+                if (!todo.isCompleted && todo.recurrence != "none" && todo.dueDate != null) {
+                    val nextDueDate = RecurrenceRule.parse(todo.recurrence).nextDueDate(todo.dueDate!!)
+                    if (nextDueDate != null) {
+                        val nextOccurrence = todo.copy(
+                            id = java.util.UUID.randomUUID().toString(),
+                            isCompleted = false,
+                            dueDate = nextDueDate,
+                            filePath = "",   // force fresh filename derivation
+                            updatedAt = java.time.LocalDateTime.now()
+                        )
+                        doSave(nextOccurrence, null)
+                    }
                 }
+                doLoad()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            } finally {
+                _uiState.update { it.copy(isSaving = false) }
             }
         }
     }

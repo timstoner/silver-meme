@@ -210,7 +210,7 @@ class MarkdownFileManagerTest {
 
     @Test
     fun `sanitizeFilename strips illegal characters`() {
-        val name = manager.sanitizeFilename("Task: buy milk / eggs <today>")
+        val name = MarkdownFileManager.sanitizeFilename("Task: buy milk / eggs <today>")
         assertTrue(!name.contains(':'))
         assertTrue(!name.contains('/'))
         assertTrue(!name.contains('<'))
@@ -219,7 +219,7 @@ class MarkdownFileManagerTest {
 
     @Test
     fun `sanitizeFilename returns untitled for blank input`() {
-        assertEquals("untitled", manager.sanitizeFilename("   "))
+        assertEquals("untitled", MarkdownFileManager.sanitizeFilename("   "))
     }
 
     // ── Priority parsing ──────────────────────────────────────────────────────
@@ -239,6 +239,49 @@ class MarkdownFileManagerTest {
         assertEquals(Priority.MEDIUM, Priority.fromString(null))
         assertEquals(Priority.MEDIUM, Priority.fromString(""))
         assertEquals(Priority.MEDIUM, Priority.fromString("unknown"))
+    }
+
+    // ── Checklist round-trip (Bug 2 regression guard) ────────────────────────
+
+    @Test
+    fun `checklist items survive a full save-parse-edit-save-parse round trip`() {
+        val checklist = listOf(
+            com.tmstoner.silvermeme.data.model.ChecklistItem("Buy milk", isDone = true),
+            com.tmstoner.silvermeme.data.model.ChecklistItem("Buy eggs", isDone = false),
+            com.tmstoner.silvermeme.data.model.ChecklistItem("Buy bread", isDone = false)
+        )
+        val original = sampleTodo().copy(checklist = checklist)
+
+        // Step 1-3: save and parse back
+        val saved1 = manager.saveTodo(original)
+        val file1 = java.io.File(tempFolder.root, saved1.filePath)
+        val parsed1 = manager.parseMarkdownFile(file1)!!
+
+        // Step 4: all 3 items present with correct isDone
+        assertEquals(3, parsed1.checklist.size)
+        assertEquals("Buy milk", parsed1.checklist[0].text)
+        assertTrue("First item should be done", parsed1.checklist[0].isDone)
+        assertEquals("Buy eggs", parsed1.checklist[1].text)
+        assertTrue("Second item should be undone", !parsed1.checklist[1].isDone)
+        assertEquals("Buy bread", parsed1.checklist[2].text)
+        assertTrue("Third item should be undone", !parsed1.checklist[2].isDone)
+
+        // Step 5-6: simulate a title edit with the same checklist preserved
+        val edited = parsed1.copy(title = "Buy groceries updated", checklist = parsed1.checklist)
+        val saved2 = manager.saveTodo(edited, previousFilePath = parsed1.filePath)
+
+        // Step 7: parse again and assert checklist is intact
+        val file2 = java.io.File(tempFolder.root, saved2.filePath)
+        val parsed2 = manager.parseMarkdownFile(file2)!!
+
+        assertEquals(3, parsed2.checklist.size)
+        assertEquals("Buy milk", parsed2.checklist[0].text)
+        assertTrue("First item should still be done", parsed2.checklist[0].isDone)
+        assertEquals("Buy eggs", parsed2.checklist[1].text)
+        assertTrue("Second item should still be undone", !parsed2.checklist[1].isDone)
+        assertEquals("Buy bread", parsed2.checklist[2].text)
+        assertTrue("Third item should still be undone", !parsed2.checklist[2].isDone)
+        assertEquals("Buy groceries updated", parsed2.title)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
