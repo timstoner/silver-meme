@@ -9,6 +9,10 @@ interface SettingsStore {
     val vaultPath: Flow<String>
     val authorName: Flow<String>
     val authorEmail: Flow<String>
+    /** Theme preference: "system", "light", or "dark". */
+    val themeMode: Flow<String>
+    /** Serialized [com.tmstoner.silvermeme.viewmodel.FilterState] snapshot (Track F). */
+    val lastFilterState: Flow<String>
 
     suspend fun setGitRemoteUrl(url: String)
     suspend fun setGitUsername(username: String)
@@ -16,4 +20,6 @@ interface SettingsStore {
     suspend fun setVaultPath(path: String)
     suspend fun setAuthorName(name: String)
     suspend fun setAuthorEmail(email: String)
+    suspend fun setThemeMode(mode: String)
+    suspend fun setLastFilterState(serialized: String)
 }

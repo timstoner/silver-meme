@@ -115,7 +115,7 @@ private class FakeTodoDataSource(
 
     override suspend fun getTodos(): List<TodoItem> = todos.toList()
 
-    override suspend fun saveTodo(todo: TodoItem): TodoItem {
+    override suspend fun saveTodo(todo: TodoItem, previousFilePath: String?): TodoItem {
         saved += todo
         todos.removeAll { it.id == todo.id }
         todos += todo

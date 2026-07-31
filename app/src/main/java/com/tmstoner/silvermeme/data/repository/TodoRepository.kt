@@ -59,9 +59,9 @@ class TodoRepository(
      *
      * @return The saved [TodoItem] with an updated [TodoItem.filePath].
      */
-    override suspend fun saveTodo(todo: TodoItem): TodoItem = withContext(Dispatchers.IO) {
+    override suspend fun saveTodo(todo: TodoItem, previousFilePath: String?): TodoItem = withContext(Dispatchers.IO) {
         val manager = markdownFileManager()
-        val saved = manager.saveTodo(todo)
+        val saved = manager.saveTodo(todo, previousFilePath)
         syncIfConfigured()
         saved
     }

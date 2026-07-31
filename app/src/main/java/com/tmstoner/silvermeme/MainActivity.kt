@@ -3,9 +3,12 @@ package com.tmstoner.silvermeme
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
@@ -22,7 +25,19 @@ class MainActivity : ComponentActivity() {
         val app = application as SilverMemeApplication
 
         setContent {
-            SilvermemeTheme {
+            val settingsViewModel: SettingsViewModel = viewModel(
+                factory = SettingsViewModel.Factory(app.settingsDataStore)
+            )
+            val settingsState by settingsViewModel.settingsState.collectAsState()
+
+            // Resolve "system" / "light" / "dark" preference into a boolean for the theme.
+            val useDarkTheme = when (settingsState.themeMode) {
+                "light" -> false
+                "dark"  -> true
+                else    -> isSystemInDarkTheme()
+            }
+
+            SilvermemeTheme(darkTheme = useDarkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color    = MaterialTheme.colorScheme.background
@@ -30,11 +45,7 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
 
                     val todoViewModel: TodoViewModel = viewModel(
-                        factory = TodoViewModel.Factory(app.todoRepository)
-                    )
-
-                    val settingsViewModel: SettingsViewModel = viewModel(
-                        factory = SettingsViewModel.Factory(app.settingsDataStore)
+                        factory = TodoViewModel.Factory(app.todoRepository, app.settingsDataStore)
                     )
 
                     AppNavGraph(

@@ -73,10 +73,15 @@ class MarkdownFileManager(private val vaultDir: File) {
     /**
      * Persists [todo] to its backing markdown file.
      * The filename is derived from [TodoItem.title]; if the item was already
-     * backed by a different file (title changed), the old file is removed.
+     * backed by a different file (title/project changed), the old file is removed.
      * Project folders can be specified by passing a custom filePath (Track E3).
+     *
+     * @param previousFilePath the file path the item was previously saved under
+     *   (before any title/project rename in this save), used to locate and delete
+     *   the stale file. Defaults to [TodoItem.filePath] for backward compatibility
+     *   when callers don't rename the item.
      */
-    fun saveTodo(todo: TodoItem): TodoItem {
+    fun saveTodo(todo: TodoItem, previousFilePath: String? = null): TodoItem {
         if (!tasksDir.exists()) tasksDir.mkdirs()
 
         val newFilename = "${sanitizeFilename(todo.title)}.md"
@@ -93,9 +98,10 @@ class MarkdownFileManager(private val vaultDir: File) {
         // Ensure parent directory exists
         newFile.parentFile?.mkdirs()
 
-        // Remove old file if the title (and therefore filename) changed
-        if (todo.filePath.isNotBlank()) {
-            val oldFile = File(vaultDir, todo.filePath)
+        // Remove old file if the title/project (and therefore path) changed
+        val oldPath = previousFilePath ?: todo.filePath
+        if (oldPath.isNotBlank()) {
+            val oldFile = File(vaultDir, oldPath)
             if (oldFile.exists() && oldFile.canonicalPath != newFile.canonicalPath) {
                 oldFile.delete()
             }
@@ -148,7 +154,8 @@ class MarkdownFileManager(private val vaultDir: File) {
                 createdAt = parseDateTime(frontmatter["created"]) ?: fileCreationTime(file),
                 updatedAt = parseDateTime(frontmatter["updated"]) ?: LocalDateTime.now(),
                 checklist = checklist,
-                recurrence = frontmatter["recurrence"]?.lowercase()?.trim() ?: "none"
+                recurrence = frontmatter["recurrence"]?.lowercase()?.trim() ?: "none",
+                loe = frontmatter["loe"]?.trim()?.toIntOrNull() ?: 0
             )
         } catch (e: Exception) {
             null
@@ -171,6 +178,7 @@ class MarkdownFileManager(private val vaultDir: File) {
             todo.tags.forEach { appendLine("  - $it") }
         }
         if (todo.recurrence != "none") appendLine("recurrence: ${todo.recurrence}")
+        if (todo.loe != 0) appendLine("loe: ${todo.loe}")
         appendLine("created: ${todo.createdAt.format(DATETIME_FORMATTER)}")
         appendLine("updated: ${todo.updatedAt.format(DATETIME_FORMATTER)}")
         appendLine(FRONTMATTER_DELIMITER)

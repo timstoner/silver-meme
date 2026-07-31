@@ -26,6 +26,8 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
         private val KEY_VAULT_PATH     = stringPreferencesKey("vault_path")
         private val KEY_AUTHOR_NAME    = stringPreferencesKey("author_name")
         private val KEY_AUTHOR_EMAIL   = stringPreferencesKey("author_email")
+        private val KEY_THEME_MODE     = stringPreferencesKey("theme_mode")
+        private val KEY_LAST_FILTER_STATE = stringPreferencesKey("last_filter_state")
     }
 
     // ── Flows (reactive reads) ────────────────────────────────────────────────
@@ -47,6 +49,13 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
 
     override val authorEmail: Flow<String> = context.dataStore.data
         .map { it[KEY_AUTHOR_EMAIL] ?: "silvermeme@local" }
+
+    /** "system" (default), "light", or "dark". */
+    override val themeMode: Flow<String> = context.dataStore.data
+        .map { it[KEY_THEME_MODE] ?: "system" }
+
+    override val lastFilterState: Flow<String> = context.dataStore.data
+        .map { it[KEY_LAST_FILTER_STATE] ?: "" }
 
     // ── Writes ────────────────────────────────────────────────────────────────
 
@@ -72,6 +81,14 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
 
     override suspend fun setAuthorEmail(email: String) {
         context.dataStore.edit { it[KEY_AUTHOR_EMAIL] = email }
+    }
+
+    override suspend fun setThemeMode(mode: String) {
+        context.dataStore.edit { it[KEY_THEME_MODE] = mode }
+    }
+
+    override suspend fun setLastFilterState(serialized: String) {
+        context.dataStore.edit { it[KEY_LAST_FILTER_STATE] = serialized }
     }
 
     /** Returns a snapshot of all settings (non-reactive, for one-shot reads). */

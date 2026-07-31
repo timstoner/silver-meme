@@ -50,7 +50,12 @@ data class TodoItem(
     /** Subtasks as checklist items (Track E1). Rendered as markdown `- [ ]` / `- [x]` in body. */
     val checklist: List<ChecklistItem> = emptyList(),
     /** Recurrence pattern for this task (Track E2). Values: "daily", "weekly", "monthly", "none". */
-    val recurrence: String = "none"
+    val recurrence: String = "none",
+    /**
+     * Level of Effort estimate (Fibonacci scale, agile-style story points).
+     * Valid values: 0 (not estimated), 1, 2, 3, 5, 8, 13.
+     */
+    val loe: Int = 0
 ) {
     /** Returns a copy marked as complete/incomplete. */
     fun withCompletion(completed: Boolean) = copy(isCompleted = completed, updatedAt = LocalDateTime.now())
@@ -62,6 +67,21 @@ data class TodoItem(
             parts.size > 2 -> parts.subList(1, parts.size - 1).joinToString("/")
             else -> ""
         }
+    }
+}
+
+/** Allowed Level of Effort values (Fibonacci scale) and their human-readable labels. */
+enum class LevelOfEffort(val points: Int, val label: String) {
+    NONE(0, "Not estimated"),
+    TRIVIAL(1, "1 · Trivial"),
+    QUICK(2, "2 · Quick"),
+    SMALL(3, "3 · Small"),
+    MEDIUM(5, "5 · Medium"),
+    LARGE(8, "8 · Large"),
+    VERY_LARGE(13, "13 · Very large");
+
+    companion object {
+        fun fromPoints(points: Int): LevelOfEffort = entries.firstOrNull { it.points == points } ?: NONE
     }
 }
 

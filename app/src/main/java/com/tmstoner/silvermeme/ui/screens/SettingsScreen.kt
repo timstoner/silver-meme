@@ -2,12 +2,15 @@ package com.tmstoner.silvermeme.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -21,12 +24,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -153,6 +159,39 @@ fun SettingsScreen(
                 modifier               = Modifier.fillMaxWidth(),
                 supportingText         = { Text("GitHub PAT with repo scope") }
             )
+
+            Spacer(Modifier.height(8.dp))
+
+            // ── Section: Appearance ────────────────────────────────────────────
+            Text("Appearance", style = MaterialTheme.typography.titleMedium)
+
+            val themeOptions = listOf(
+                "system" to "System default",
+                "light"  to "Light",
+                "dark"   to "Dark"
+            )
+            Column(Modifier.selectableGroup()) {
+                themeOptions.forEach { (value, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = state.themeMode == value,
+                                onClick  = { viewModel.setThemeMode(value) },
+                                role     = Role.RadioButton
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = state.themeMode == value,
+                            onClick  = { viewModel.setThemeMode(value) }
+                        )
+                        Spacer(Modifier.height(0.dp))
+                        Text(label, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
 
             Spacer(Modifier.height(8.dp))
 

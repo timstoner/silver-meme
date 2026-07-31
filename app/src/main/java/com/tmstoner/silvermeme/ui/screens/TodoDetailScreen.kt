@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tmstoner.silvermeme.data.model.Priority
+import com.tmstoner.silvermeme.data.model.LevelOfEffort
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 import java.time.Instant
@@ -56,6 +57,13 @@ import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 private val DATE_DISPLAY = DateTimeFormatter.ofPattern("MMM d, yyyy")
+
+private fun recurrenceLabel(value: String): String = when (value) {
+    "daily"   -> "Daily"
+    "weekly"  -> "Weekly"
+    "monthly" -> "Monthly"
+    else      -> "Does not repeat"
+}
 
 /**
  * Screen for creating a new TODO item or editing an existing one.
@@ -87,9 +95,16 @@ fun TodoDetailScreen(
     var tags        by remember { mutableStateOf(existingTodo?.tags        ?: emptyList()) }
     var tagInput    by remember { mutableStateOf("") }
     var titleError  by remember { mutableStateOf(false) }
+    var recurrence  by remember { mutableStateOf(existingTodo?.recurrence  ?: "none") }
+    var loe         by remember { mutableStateOf(existingTodo?.loe         ?: 0) }
+    var project     by remember { mutableStateOf(existingTodo?.project     ?: "") }
 
     var showDatePicker    by remember { mutableStateOf(false) }
     var showPriorityMenu  by remember { mutableStateOf(false) }
+    var showRecurrenceMenu by remember { mutableStateOf(false) }
+    var showLoeMenu       by remember { mutableStateOf(false) }
+    var showProjectMenu   by remember { mutableStateOf(false) }
+    val availableProjects = viewModel.getAvailableProjects()
 
     // Navigate back after a successful save
     LaunchedEffect(uiState.isSaving) {
@@ -98,23 +113,37 @@ fun TodoDetailScreen(
         }
     }
 
-    fun buildTodo() = TodoItem(
-        id          = existingTodo?.id ?: UUID.randomUUID().toString(),
-        title       = title.trim(),
-        content     = notes.trim(),
-        dueDate     = dueDate,
-        priority    = priority,
-        location    = location.trim().takeIf { it.isNotBlank() },
-        tags        = tags,
-        isCompleted = existingTodo?.isCompleted ?: false,
-        filePath    = existingTodo?.filePath ?: "",
-        createdAt   = existingTodo?.createdAt ?: java.time.LocalDateTime.now()
-    )
+    /** Mirrors the sanitization rules in MarkdownFileManager.sanitizeFilename. */
+    fun sanitizeForFilename(name: String): String =
+        name.trim()
+            .replace(Regex("""[/\\:*?"<>|#]"""), "")
+            .take(150)
+            .ifBlank { "Untitled" }
+
+    fun buildTodo(): TodoItem {
+        val cleanedProject = project.trim()
+        val filename = "${sanitizeForFilename(title)}.md"
+        val filePath = if (cleanedProject.isNotBlank()) "Tasks/$cleanedProject/$filename" else "Tasks/$filename"
+        return TodoItem(
+            id          = existingTodo?.id ?: UUID.randomUUID().toString(),
+            title       = title.trim(),
+            content     = notes.trim(),
+            dueDate     = dueDate,
+            priority    = priority,
+            location    = location.trim().takeIf { it.isNotBlank() },
+            tags        = tags,
+            isCompleted = existingTodo?.isCompleted ?: false,
+            filePath    = filePath,
+            createdAt   = existingTodo?.createdAt ?: java.time.LocalDateTime.now(),
+            recurrence  = recurrence,
+            loe         = loe
+        )
+    }
 
     fun onSave() {
         if (title.isBlank()) { titleError = true; return }
         titleError = false
-        viewModel.saveTodo(buildTodo())
+        viewModel.saveTodo(buildTodo(), previousFilePath = existingTodo?.filePath)
         onBack()
     }
 
@@ -204,6 +233,95 @@ fun TodoDetailScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // ── Recurrence ────────────────────────────────────────────────────
+            ExposedDropdownMenuBox(
+                expanded        = showRecurrenceMenu,
+                onExpandedChange = { showRecurrenceMenu = it }
+            ) {
+                OutlinedTextField(
+                    value           = recurrenceLabel(recurrence),
+                    onValueChange   = {},
+                    readOnly        = true,
+                    label           = { Text("Repeat") },
+                    trailingIcon    = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showRecurrenceMenu) },
+                    modifier        = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded        = showRecurrenceMenu,
+                    onDismissRequest = { showRecurrenceMenu = false }
+                ) {
+                    listOf("none", "daily", "weekly", "monthly").forEach { r ->
+                        DropdownMenuItem(
+                            text    = { Text(recurrenceLabel(r)) },
+                            onClick = { recurrence = r; showRecurrenceMenu = false }
+                        )
+                    }
+                }
+            }
+
+            // ── Level of Effort (LOE) ────────────────────────────────────────────
+            ExposedDropdownMenuBox(
+                expanded        = showLoeMenu,
+                onExpandedChange = { showLoeMenu = it }
+            ) {
+                OutlinedTextField(
+                    value           = LevelOfEffort.fromPoints(loe).label,
+                    onValueChange   = {},
+                    readOnly        = true,
+                    label           = { Text("LOE") },
+                    trailingIcon    = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showLoeMenu) },
+                    modifier        = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded        = showLoeMenu,
+                    onDismissRequest = { showLoeMenu = false }
+                ) {
+                    LevelOfEffort.entries.forEach { level ->
+                        DropdownMenuItem(
+                            text    = { Text(level.label) },
+                            onClick = { loe = level.points; showLoeMenu = false }
+                        )
+                    }
+                }
+            }
+
+            // ── Project / folder ──────────────────────────────────────────────
+            ExposedDropdownMenuBox(
+                expanded        = showProjectMenu && availableProjects.isNotEmpty(),
+                onExpandedChange = { showProjectMenu = it }
+            ) {
+                OutlinedTextField(
+                    value         = project,
+                    onValueChange = { project = it; showProjectMenu = true },
+                    label         = { Text("Project / folder") },
+                    placeholder   = { Text("None") },
+                    trailingIcon  = if (availableProjects.isNotEmpty()) {
+                        { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showProjectMenu) }
+                    } else null,
+                    modifier      = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    supportingText = { Text("Group related tasks together") }
+                )
+                if (availableProjects.isNotEmpty()) {
+                    ExposedDropdownMenu(
+                        expanded        = showProjectMenu,
+                        onDismissRequest = { showProjectMenu = false }
+                    ) {
+                        availableProjects.forEach { p ->
+                            DropdownMenuItem(
+                                text    = { Text(p) },
+                                onClick = { project = p; showProjectMenu = false }
+                            )
+                        }
+                    }
+                }
+            }
 
             // ── Location ──────────────────────────────────────────────────────
             OutlinedTextField(

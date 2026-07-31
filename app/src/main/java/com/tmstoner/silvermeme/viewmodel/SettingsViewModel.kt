@@ -29,15 +29,17 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
             settingsDataStore.vaultPath,
             settingsDataStore.authorName,
             settingsDataStore.authorEmail
-        ) { path, name, email -> Triple(path, name, email) }
-    ) { (url, user, token), (path, name, email) ->
+        ) { path, name, email -> Triple(path, name, email) },
+        settingsDataStore.themeMode
+    ) { (url, user, token), (path, name, email), themeMode ->
         SettingsUiState(
             gitRemoteUrl = url,
             gitUsername  = user,
             gitToken     = token,
             vaultPath    = path,
             authorName   = name,
-            authorEmail  = email
+            authorEmail  = email,
+            themeMode    = themeMode
         )
     }.stateIn(
         scope = viewModelScope,
@@ -67,6 +69,13 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
         }
     }
 
+    /** Updates the theme preference immediately (applied without needing to press Save). */
+    fun setThemeMode(mode: String) {
+        viewModelScope.launch {
+            settingsDataStore.setThemeMode(mode)
+        }
+    }
+
     fun clearSavedFlag() {
         _isSaved.value = false
     }
@@ -86,5 +95,7 @@ data class SettingsUiState(
     val gitToken:     String = "",
     val vaultPath:    String = "",
     val authorName:   String = "SilverMeme",
-    val authorEmail:  String = "silvermeme@local"
+    val authorEmail:  String = "silvermeme@local",
+    /** "system", "light", or "dark". */
+    val themeMode:    String = "system"
 )
