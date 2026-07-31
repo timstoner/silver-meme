@@ -1,5 +1,6 @@
 package com.tmstoner.silvermeme.data.storage
 
+import com.tmstoner.silvermeme.data.model.ChecklistItem
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
 import java.io.File
@@ -102,11 +103,15 @@ class MarkdownFileManager(private val vaultDir: File) {
             val frontmatter = parseFrontmatter(content)
             val body = parseBody(content)
             val relativePath = file.relativeTo(vaultDir).path
+            
+            // Parse checklist items from body (Track E1)
+            val checklist = parseChecklistFromBody(body)
+            val bodyWithoutChecklist = body.replace(Regex("^- \\[[ xX]\\] .*$", RegexOption.MULTILINE), "").trim()
 
             TodoItem(
                 id = frontmatter["id"]?.takeIf { it.isNotBlank() } ?: file.nameWithoutExtension,
                 title = frontmatter["title"]?.takeIf { it.isNotBlank() } ?: file.nameWithoutExtension,
-                content = body,
+                content = bodyWithoutChecklist,
                 dueDate = parseDate(frontmatter["due"]),
                 priority = Priority.fromString(frontmatter["priority"]),
                 location = frontmatter["location"]?.takeIf { it.isNotBlank() },
@@ -114,7 +119,8 @@ class MarkdownFileManager(private val vaultDir: File) {
                 isCompleted = frontmatter["status"]?.lowercase()?.trim() == "done",
                 filePath = relativePath,
                 createdAt = parseDateTime(frontmatter["created"]) ?: fileCreationTime(file),
-                updatedAt = parseDateTime(frontmatter["updated"]) ?: LocalDateTime.now()
+                updatedAt = parseDateTime(frontmatter["updated"]) ?: LocalDateTime.now(),
+                checklist = checklist
             )
         } catch (e: Exception) {
             null
@@ -139,8 +145,17 @@ class MarkdownFileManager(private val vaultDir: File) {
         appendLine("created: ${todo.createdAt.format(DATETIME_FORMATTER)}")
         appendLine("updated: ${todo.updatedAt.format(DATETIME_FORMATTER)}")
         appendLine(FRONTMATTER_DELIMITER)
+        
+        // Emit checklist items as markdown checkboxes (Track E1)
+        if (todo.checklist.isNotEmpty()) {
+            todo.checklist.forEach { item ->
+                val checkbox = if (item.isDone) "[x]" else "[ ]"
+                appendLine("- $checkbox ${item.text}")
+            }
+        }
+        
         if (todo.content.isNotBlank()) {
-            appendLine()
+            if (todo.checklist.isNotEmpty()) appendLine() // separator if checklist exists
             append(todo.content)
             if (!todo.content.endsWith("\n")) appendLine()
         }
@@ -242,4 +257,15 @@ class MarkdownFileManager(private val vaultDir: File) {
             .trimEnd('.')
             .take(150)
             .ifEmpty { "untitled" }
+
+    /** Extracts checklist items from markdown body (Track E1). Parses `- [ ]` / `- [x]` syntax. */
+    private fun parseChecklistFromBody(body: String): List<ChecklistItem> =
+        Regex("^- \\[[ xX]\\] (.*)$", RegexOption.MULTILINE)
+            .findAll(body)
+            .map { match ->
+                val isChecked = match.groupValues[0].contains("[x") || match.groupValues[0].contains("[X")
+                val text = match.groupValues[1]
+                ChecklistItem(text, isChecked)
+            }
+            .toList()
 }

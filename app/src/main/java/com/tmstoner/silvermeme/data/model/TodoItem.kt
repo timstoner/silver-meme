@@ -46,8 +46,16 @@ data class TodoItem(
      */
     val filePath: String = "",
     val createdAt: LocalDateTime = LocalDateTime.now(),
-    val updatedAt: LocalDateTime = LocalDateTime.now()
+    val updatedAt: LocalDateTime = LocalDateTime.now(),
+    /** Subtasks as checklist items (Track E1). Rendered as markdown `- [ ]` / `- [x]` in body. */
+    val checklist: List<ChecklistItem> = emptyList()
 ) {
     /** Returns a copy marked as complete/incomplete. */
     fun withCompletion(completed: Boolean) = copy(isCompleted = completed, updatedAt = LocalDateTime.now())
 }
+
+/** A single checklist item within a TodoItem. */
+data class ChecklistItem(
+    val text: String,
+    val isDone: Boolean = false
+)
