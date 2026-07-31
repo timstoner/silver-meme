@@ -9,13 +9,16 @@ import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.repository.GitRepository
 import com.tmstoner.silvermeme.data.repository.TodoDataSource
 import com.tmstoner.silvermeme.data.storage.SettingsStore
+import com.tmstoner.silvermeme.notifications.NotificationScheduler
 import com.tmstoner.silvermeme.util.FilterStateSerializer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -33,7 +36,8 @@ import java.time.LocalDate
  */
 class TodoViewModel(
     private val repository: TodoDataSource,
-    private val settingsStore: SettingsStore? = null
+    private val settingsStore: SettingsStore? = null,
+    private val notificationScheduler: NotificationScheduler? = null
 ) : ViewModel() {
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -54,11 +58,22 @@ class TodoViewModel(
     private val _filterState = MutableStateFlow(FilterState())
     val filterState: StateFlow<FilterState> = _filterState.asStateFlow()
 
+    // Raw search input — debounced before persisting to avoid per-keystroke DataStore writes.
+    private val _searchInput = MutableStateFlow("")
+
     // ── Init ──────────────────────────────────────────────────────────────────
 
     init {
         restoreFilterState()
         loadTodos()
+        // Debounce search input: persist to DataStore only after 250 ms of inactivity.
+        viewModelScope.launch {
+            _searchInput
+                .debounce(250)
+                .collect { query ->
+                    updateFilter { it.copy(searchQuery = query) }
+                }
+        }
     }
 
     // ── Load ──────────────────────────────────────────────────────────────────
@@ -119,6 +134,14 @@ class TodoViewModel(
             _uiState.update { it.copy(isSaving = true) }
             try {
                 doSave(todo, previousFilePath)
+                // Schedule or cancel reminder based on completion/due-date state
+                if (todo.isCompleted) {
+                    notificationScheduler?.cancel(todo.id)
+                } else if (todo.dueDate != null) {
+                    notificationScheduler?.schedule(todo)
+                } else {
+                    notificationScheduler?.cancel(todo.id)
+                }
                 doLoad()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
@@ -174,6 +197,7 @@ class TodoViewModel(
         viewModelScope.launch {
             try {
                 repository.deleteTodo(todo)
+                notificationScheduler?.cancel(todo.id)
                 loadTodos()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
@@ -203,6 +227,17 @@ class TodoViewModel(
 
     fun setSearchQuery(query: String) =
         updateFilter { it.copy(searchQuery = query) }
+
+    /**
+     * Called on each keystroke. Updates the displayed search text immediately;
+     * debounced persistence to DataStore happens via [_searchInput].
+     */
+    fun onSearchInput(query: String) {
+        _searchInput.value = query
+        // Update filterState immediately for the search bar to reflect current text,
+        // but skip DataStore write here — the debounced collector handles that.
+        _filterState.update { it.copy(searchQuery = query) }
+    }
 
     fun setFilterProject(project: String?) =
         updateFilter { it.copy(project = project) }
@@ -318,9 +353,12 @@ class TodoViewModel(
 
     // ── Projects (Track E3 / F) ──────────────────────────────────────────────────
 
-    /** Returns the distinct, sorted set of non-empty project names currently in use. */
-    fun getAvailableProjects(): List<String> =
-        _uiState.value.todos.map { it.project }.filter { it.isNotBlank() }.distinct().sorted()
+    /** Reactive distinct, sorted set of non-empty project names currently in use. */
+    val availableProjects: StateFlow<List<String>> =
+        _uiState.map { state ->
+            state.todos.map { it.project }.filter { it.isNotBlank() }.distinct().sorted()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // ── Level of Effort (LOE) capacity planning (Track F) ────────────────────────
 
@@ -355,11 +393,12 @@ class TodoViewModel(
 
     class Factory(
         private val repository: TodoDataSource,
-        private val settingsStore: SettingsStore? = null
+        private val settingsStore: SettingsStore? = null,
+        private val notificationScheduler: NotificationScheduler? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            TodoViewModel(repository, settingsStore) as T
+            TodoViewModel(repository, settingsStore, notificationScheduler) as T
     }
 
     companion object {

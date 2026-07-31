@@ -1,6 +1,13 @@
 package com.tmstoner.silvermeme.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -53,12 +60,20 @@ fun AppNavGraph(
             arguments = listOf(navArgument("todoId") { type = NavType.StringType })
         ) { backStackEntry ->
             val todoId = backStackEntry.arguments?.getString("todoId").orEmpty()
-            val todo = todoViewModel.uiState.value.todos.firstOrNull { it.id == todoId }
-            TodoDetailScreen(
-                viewModel = todoViewModel,
-                existingTodo = todo,
-                onBack = { navController.popBackStack() }
-            )
+            val uiState by todoViewModel.uiState.collectAsStateWithLifecycle()
+            val todo = uiState.todos.firstOrNull { it.id == todoId }
+
+            if (uiState.isLoading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                TodoDetailScreen(
+                    viewModel = todoViewModel,
+                    existingTodo = todo,
+                    onBack = { navController.popBackStack() }
+                )
+            }
         }
 
         composable(Routes.SETTINGS) {

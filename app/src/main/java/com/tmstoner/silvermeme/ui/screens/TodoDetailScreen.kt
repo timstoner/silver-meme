@@ -1,5 +1,6 @@
 package com.tmstoner.silvermeme.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -28,7 +30,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,18 +44,20 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.tmstoner.silvermeme.data.model.Priority
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tmstoner.silvermeme.data.model.LevelOfEffort
+import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.RecurrenceRule
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
 import com.tmstoner.silvermeme.ui.components.RecurrenceDialog
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 import java.time.Instant
@@ -79,21 +82,34 @@ fun TodoDetailScreen(
     existingTodo: TodoItem? = null,
     onBack: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState           by viewModel.uiState.collectAsStateWithLifecycle()
+    val availableProjects by viewModel.availableProjects.collectAsStateWithLifecycle()
     val isEditing = existingTodo != null
 
-    // Form state
-    var title          by remember { mutableStateOf(existingTodo?.title       ?: "") }
-    var notes          by remember { mutableStateOf(existingTodo?.content     ?: "") }
-    var dueDate        by remember { mutableStateOf(existingTodo?.dueDate) }
-    var priority       by remember { mutableStateOf(existingTodo?.priority    ?: Priority.MEDIUM) }
-    var location       by remember { mutableStateOf(existingTodo?.location    ?: "") }
-    var tags           by remember { mutableStateOf(existingTodo?.tags        ?: emptyList()) }
-    var tagInput       by remember { mutableStateOf("") }
-    var titleError     by remember { mutableStateOf(false) }
-    var recurrenceRule by remember { mutableStateOf(RecurrenceRule.parse(existingTodo?.recurrence ?: "none")) }
-    var loe            by remember { mutableStateOf(existingTodo?.loe         ?: 0) }
-    var project        by remember { mutableStateOf(existingTodo?.project     ?: "") }
+    // Fix 4: rememberSaveable for all form fields, keyed on existingTodo?.id
+    // so that editing a different task resets the form.
+    var title    by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.title   ?: "") }
+    var notes    by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.content ?: "") }
+    var dueDate  by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.dueDate) }
+    var priority by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.priority ?: Priority.MEDIUM) }
+    var location by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.location ?: "") }
+    var loe      by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.loe ?: 0) }
+    var project  by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.project ?: "") }
+
+    // Fix 4: tags stored as a comma-separated string for Saveable compatibility
+    var tagsString by rememberSaveable(existingTodo?.id) {
+        mutableStateOf(existingTodo?.tags?.joinToString(",") ?: "")
+    }
+    val tags: List<String> = tagsString.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+    // Fix 4: recurrence stored as its storage string for Saveable compatibility
+    var recurrenceString by rememberSaveable(existingTodo?.id) {
+        mutableStateOf(existingTodo?.recurrence ?: "none")
+    }
+    val recurrenceRule = RecurrenceRule.parse(recurrenceString)
+
+    var tagInput   by rememberSaveable(existingTodo?.id) { mutableStateOf("") }
+    var titleError by remember { mutableStateOf(false) }
 
     // Whether any optional field already has non-default data (so editing an
     // existing task with those fields set doesn't hide them by default).
@@ -104,14 +120,15 @@ fun TodoDetailScreen(
         existingTodo.tags.isNotEmpty() ||
         existingTodo.recurrence != "none"
     )
+    // showOptionalFields is transient UI state, not form data
     var showOptionalFields by remember { mutableStateOf(hasOptionalData) }
 
-    var showDatePicker      by remember { mutableStateOf(false) }
-    var showPriorityMenu    by remember { mutableStateOf(false) }
-    var showScheduleDialog  by remember { mutableStateOf(false) }
-    var showLoeMenu         by remember { mutableStateOf(false) }
-    var showProjectMenu     by remember { mutableStateOf(false) }
-    val availableProjects = viewModel.getAvailableProjects()
+    // Transient dialog state — no need to survive rotation
+    var showDatePicker     by remember { mutableStateOf(false) }
+    var showPriorityMenu   by remember { mutableStateOf(false) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
+    var showLoeMenu        by remember { mutableStateOf(false) }
+    var showProjectMenu    by remember { mutableStateOf(false) }
 
     // Navigate back after a successful save
     LaunchedEffect(uiState.isSaving) {
@@ -120,16 +137,10 @@ fun TodoDetailScreen(
         }
     }
 
-    /** Mirrors the sanitization rules in MarkdownFileManager.sanitizeFilename. */
-    fun sanitizeForFilename(name: String): String =
-        name.trim()
-            .replace(Regex("""[/\\:*?"<>|#]"""), "")
-            .take(150)
-            .ifBlank { "Untitled" }
-
     fun buildTodo(): TodoItem {
         val cleanedProject = project.trim()
-        val filename = "${sanitizeForFilename(title)}.md"
+        // Fix 7: delegate sanitization to MarkdownFileManager (canonical source)
+        val filename = "${MarkdownFileManager.sanitizeFilename(title.trim())}.md"
         val filePath = if (cleanedProject.isNotBlank()) "Tasks/$cleanedProject/$filename" else "Tasks/$filename"
         return TodoItem(
             id          = existingTodo?.id ?: UUID.randomUUID().toString(),
@@ -143,7 +154,9 @@ fun TodoDetailScreen(
             filePath    = filePath,
             createdAt   = existingTodo?.createdAt ?: java.time.LocalDateTime.now(),
             recurrence  = recurrenceRule.toStorageString(),
-            loe         = loe
+            loe         = loe,
+            // Fix 4 (P0-checklist UI side): preserve checklist from existing todo
+            checklist   = existingTodo?.checklist ?: emptyList()
         )
     }
 
@@ -152,6 +165,24 @@ fun TodoDetailScreen(
         titleError = false
         viewModel.saveTodo(buildTodo(), previousFilePath = existingTodo?.filePath)
         onBack()
+    }
+
+    // Fix 5: dirty-state detection for unsaved-changes guard
+    val isDirty = title            != (existingTodo?.title      ?: "")           ||
+                  notes            != (existingTodo?.content    ?: "")           ||
+                  dueDate          != existingTodo?.dueDate                       ||
+                  priority         != (existingTodo?.priority   ?: Priority.MEDIUM) ||
+                  location         != (existingTodo?.location   ?: "")           ||
+                  loe              != (existingTodo?.loe        ?: 0)             ||
+                  project          != (existingTodo?.project    ?: "")           ||
+                  tagsString       != (existingTodo?.tags?.joinToString(",") ?: "") ||
+                  recurrenceString != (existingTodo?.recurrence ?: "none")
+
+    var showDiscardDialog by remember { mutableStateOf(false) }
+
+    // Fix 5: intercept system back if there are unsaved changes
+    BackHandler(enabled = isDirty) {
+        showDiscardDialog = true
     }
 
     Scaffold(
@@ -163,7 +194,8 @@ fun TodoDetailScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    // Fix 5: guard nav icon as well
+                    IconButton(onClick = { if (isDirty) showDiscardDialog = true else onBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
@@ -183,24 +215,26 @@ fun TodoDetailScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ── Title ─────────────────────────────────────────────────────────
+            // -- Title
             OutlinedTextField(
                 value         = title,
-                onValueChange = { title = it; titleError = false },
+                onValueChange = { newVal -> title = newVal; titleError = false },
                 label         = { Text("Title *") },
                 isError       = titleError,
-                supportingText = if (titleError) {{ Text("Title is required") }} else null,
+                supportingText = if (titleError) {
+                    { Text("Title is required") }
+                } else null,
                 singleLine    = true,
                 modifier      = Modifier.fillMaxWidth()
             )
 
-            // ── Priority ──────────────────────────────────────────────────────
+            // -- Priority
             ExposedDropdownMenuBox(
                 expanded        = showPriorityMenu,
-                onExpandedChange = { showPriorityMenu = it }
+                onExpandedChange = { expanded -> showPriorityMenu = expanded }
             ) {
                 OutlinedTextField(
-                    value           = priority.label.replaceFirstChar { it.uppercaseChar() },
+                    value           = priority.label.replaceFirstChar { c -> c.uppercaseChar() },
                     onValueChange   = {},
                     readOnly        = true,
                     label           = { Text("Priority") },
@@ -215,14 +249,14 @@ fun TodoDetailScreen(
                 ) {
                     Priority.entries.forEach { p ->
                         DropdownMenuItem(
-                            text    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) },
+                            text    = { Text(p.label.replaceFirstChar { c -> c.uppercaseChar() }) },
                             onClick = { priority = p; showPriorityMenu = false }
                         )
                     }
                 }
             }
 
-            // ── Due date ──────────────────────────────────────────────────────
+            // -- Due date
             OutlinedTextField(
                 value         = dueDate?.format(DATE_DISPLAY) ?: "",
                 onValueChange = {},
@@ -241,10 +275,10 @@ fun TodoDetailScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // ── Notes (markdown body) ─────────────────────────────────────────
+            // -- Notes (markdown body)
             OutlinedTextField(
                 value         = notes,
-                onValueChange = { notes = it },
+                onValueChange = { newVal -> notes = newVal },
                 label         = { Text("Notes (Markdown)") },
                 minLines      = 4,
                 modifier      = Modifier.fillMaxWidth()
@@ -252,7 +286,7 @@ fun TodoDetailScreen(
 
             HorizontalDivider()
 
-            // ── Show/hide optional fields ────────────────────────────────────
+            // -- Show/hide optional fields
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -273,7 +307,7 @@ fun TodoDetailScreen(
             }
 
             if (showOptionalFields) {
-                // ── Schedule (recurrence) ────────────────────────────────────
+                // -- Schedule (recurrence)
                 OutlinedTextField(
                     value         = recurrenceRule.summary(),
                     onValueChange = {},
@@ -284,10 +318,10 @@ fun TodoDetailScreen(
                     modifier      = Modifier.fillMaxWidth()
                 )
 
-                // ── Level of Effort (LOE) ────────────────────────────────────
+                // -- Level of Effort (LOE)
                 ExposedDropdownMenuBox(
                     expanded        = showLoeMenu,
-                    onExpandedChange = { showLoeMenu = it }
+                    onExpandedChange = { expanded -> showLoeMenu = expanded }
                 ) {
                     OutlinedTextField(
                         value           = LevelOfEffort.fromPoints(loe).label,
@@ -312,17 +346,18 @@ fun TodoDetailScreen(
                     }
                 }
 
-                // ── Project / folder ─────────────────────────────────────────
+                // -- Project / folder
+                val hasProjects = availableProjects.isNotEmpty()
                 ExposedDropdownMenuBox(
-                    expanded        = showProjectMenu && availableProjects.isNotEmpty(),
-                    onExpandedChange = { showProjectMenu = it }
+                    expanded        = showProjectMenu && hasProjects,
+                    onExpandedChange = { expanded -> showProjectMenu = expanded }
                 ) {
                     OutlinedTextField(
                         value         = project,
-                        onValueChange = { project = it; showProjectMenu = true },
+                        onValueChange = { newVal -> project = newVal; showProjectMenu = true },
                         label         = { Text("Project / folder") },
                         placeholder   = { Text("None") },
-                        trailingIcon  = if (availableProjects.isNotEmpty()) {
+                        trailingIcon  = if (hasProjects) {
                             { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showProjectMenu) }
                         } else null,
                         modifier      = Modifier
@@ -330,7 +365,7 @@ fun TodoDetailScreen(
                             .menuAnchor(),
                         supportingText = { Text("Group related tasks together") }
                     )
-                    if (availableProjects.isNotEmpty()) {
+                    if (hasProjects) {
                         ExposedDropdownMenu(
                             expanded        = showProjectMenu,
                             onDismissRequest = { showProjectMenu = false }
@@ -345,23 +380,25 @@ fun TodoDetailScreen(
                     }
                 }
 
-                // ── Location ──────────────────────────────────────────────────
+                // -- Location
                 OutlinedTextField(
                     value         = location,
-                    onValueChange = { location = it },
+                    onValueChange = { newVal -> location = newVal },
                     label         = { Text("Location") },
                     singleLine    = true,
                     modifier      = Modifier.fillMaxWidth()
                 )
 
-                // ── Tags ──────────────────────────────────────────────────────
+                // -- Tags
                 Column {
                     Text("Tags", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(4.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         tags.forEach { tag ->
                             AssistChip(
-                                onClick      = { tags = tags - tag },
+                                onClick      = {
+                                    tagsString = (tags - tag).joinToString(",")
+                                },
                                 label        = { Text("#$tag") },
                                 trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove tag") }
                             )
@@ -373,16 +410,16 @@ fun TodoDetailScreen(
                     ) {
                         OutlinedTextField(
                             value         = tagInput,
-                            onValueChange = { tagInput = it },
+                            onValueChange = { newVal -> tagInput = newVal },
                             label         = { Text("Add tag") },
                             singleLine    = true,
                             modifier      = Modifier.weight(1f)
                         )
                         IconButton(
-                            onClick  = {
+                            onClick = {
                                 val cleaned = tagInput.trim().lowercase().replace(' ', '-')
                                 if (cleaned.isNotEmpty() && !tags.contains(cleaned)) {
-                                    tags = tags + cleaned
+                                    tagsString = (tags + cleaned).joinToString(",")
                                 }
                                 tagInput = ""
                             }
@@ -397,13 +434,29 @@ fun TodoDetailScreen(
         }
     }
 
-    // ── Date picker dialog ─────────────────────────────────────────────────────
+    // Fix 5: discard-changes confirmation dialog
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title   = { Text("Discard changes?") },
+            text    = { Text("Your unsaved changes will be lost.") },
+            confirmButton = {
+                TextButton(onClick = { showDiscardDialog = false; onBack() }) { Text("Discard") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) { Text("Keep editing") }
+            }
+        )
+    }
+
+    // -- Date picker dialog
     if (showDatePicker) {
+        val initialMillis = dueDate
+            ?.atStartOfDay(ZoneId.of("UTC"))
+            ?.toInstant()
+            ?.toEpochMilli()
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = dueDate
-                ?.atStartOfDay(ZoneId.of("UTC"))
-                ?.toInstant()
-                ?.toEpochMilli()
+            initialSelectedDateMillis = initialMillis
         )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -425,11 +478,14 @@ fun TodoDetailScreen(
         }
     }
 
-    // ── Schedule (recurrence) dialog ────────────────────────────────────────────
+    // -- Schedule (recurrence) dialog
     if (showScheduleDialog) {
         RecurrenceDialog(
             initial   = recurrenceRule,
-            onConfirm = { rule -> recurrenceRule = rule; showScheduleDialog = false },
+            onConfirm = { rule ->
+                recurrenceString = rule.toStorageString()
+                showScheduleDialog = false
+            },
             onDismiss = { showScheduleDialog = false }
         )
     }

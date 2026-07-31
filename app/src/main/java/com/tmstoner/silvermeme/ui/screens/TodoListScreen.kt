@@ -35,6 +35,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -49,9 +50,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
@@ -83,10 +85,11 @@ fun TodoListScreen(
     onEditTodo: (TodoItem) -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    val uiState      by viewModel.uiState.collectAsState()
-    val filterState  by viewModel.filterState.collectAsState()
-    val syncState    by viewModel.syncState.collectAsState()
-    val groups       by viewModel.visibleGroups.collectAsState()
+    val uiState           by viewModel.uiState.collectAsStateWithLifecycle()
+    val filterState       by viewModel.filterState.collectAsStateWithLifecycle()
+    val syncState         by viewModel.syncState.collectAsStateWithLifecycle()
+    val groups            by viewModel.visibleGroups.collectAsStateWithLifecycle()
+    val availableProjects by viewModel.availableProjects.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
@@ -98,7 +101,6 @@ fun TodoListScreen(
     var searchQuery        by remember { mutableStateOf("") }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val availableProjects = viewModel.getAvailableProjects()
 
     // Transparent resync: pull from remote automatically when the list screen
     // is first shown, so the user never has to tap the manual sync button just
@@ -224,7 +226,7 @@ fun TodoListScreen(
                             showSearchBar = !showSearchBar
                             if (!showSearchBar) {
                                 searchQuery = ""
-                                viewModel.setSearchQuery("")
+                                viewModel.onSearchInput("")
                             }
                         }) {
                             Icon(Icons.Filled.Search, contentDescription = "Search")
@@ -285,11 +287,11 @@ fun TodoListScreen(
                 AnimatedVisibility(visible = showSearchBar) {
                     SearchBar(
                         query         = searchQuery,
-                        onQueryChange = { q -> searchQuery = q; viewModel.setSearchQuery(q) },
-                        onSearch      = { viewModel.setSearchQuery(it) },
+                        onQueryChange = { q -> searchQuery = q; viewModel.onSearchInput(q) },
+                        onSearch      = { viewModel.onSearchInput(it) },
                         active        = false,
                         onActiveChange = {},
-                        placeholder   = { Text("Search todos…") },
+                        placeholder   = { Text("Search todos...") },
                         modifier      = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -341,49 +343,63 @@ fun TodoListScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            when {
-                uiState.isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                }
-                groups.isEmpty() -> {
-                    Column(
-                        modifier            = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            "No todos found",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Tap + to create one, or pull to sync",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            // Fix 3: pull-to-refresh wraps all list content
+            val isRefreshing = syncState is SyncState.Syncing
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh    = { viewModel.syncFromRemote() },
+                modifier     = Modifier.fillMaxSize()
+            ) {
+                // Fix 1: keep LazyColumn always mounted; LinearProgressIndicator replaces full spinner
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (uiState.isLoading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
-                }
-                else -> {
-                    LazyColumn(
-                        contentPadding = PaddingValues(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        groups.forEach { group ->
-                            item(key = "header_${group.label}") {
+                    if (!uiState.isLoading && groups.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text     = "${group.label} (${group.todos.size})",
-                                    style    = MaterialTheme.typography.titleSmall,
-                                    color    = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(vertical = 4.dp)
+                                    "No todos found",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "Tap + to create one, or pull to sync",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            items(items = group.todos, key = { it.id }) { todo ->
-                                TodoItemCard(
-                                    todo             = todo,
-                                    onToggleComplete = { viewModel.toggleComplete(it) },
-                                    onClick          = { onEditTodo(it) },
-                                    onLongClick      = { showDeleteDialog = it }
-                                )
+                        }
+                    } else {
+                        LazyColumn(
+                            contentPadding      = PaddingValues(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            groups.forEach { group ->
+                                // Fix 2: stable keys + contentType for group headers
+                                item(key = "header_${group.label}", contentType = "group_header") {
+                                    Text(
+                                        text     = "${group.label} (${group.todos.size})",
+                                        style    = MaterialTheme.typography.titleSmall,
+                                        color    = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                }
+                                // Fix 2: stable keys + contentType + animateItem for todo cards
+                                items(
+                                    items       = group.todos,
+                                    key         = { it.id },
+                                    contentType = { "todo_card" }
+                                ) { todo ->
+                                    TodoItemCard(
+                                        todo             = todo,
+                                        onToggleComplete = { viewModel.toggleComplete(it) },
+                                        onClick          = { onEditTodo(it) },
+                                        onLongClick      = { showDeleteDialog = it },
+                                        modifier         = Modifier.animateItem()
+                                    )
+                                }
                             }
                         }
                     }
