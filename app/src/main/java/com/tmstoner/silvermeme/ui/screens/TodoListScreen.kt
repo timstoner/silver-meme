@@ -86,8 +86,7 @@ fun TodoListScreen(
     val uiState      by viewModel.uiState.collectAsState()
     val filterState  by viewModel.filterState.collectAsState()
     val syncState    by viewModel.syncState.collectAsState()
-    val todos           = viewModel.filteredTodos()
-    val groups          = viewModel.groupedTodos()
+    val groups       by viewModel.visibleGroups.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
@@ -100,6 +99,13 @@ fun TodoListScreen(
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val availableProjects = viewModel.getAvailableProjects()
+
+    // Transparent resync: pull from remote automatically when the list screen
+    // is first shown, so the user never has to tap the manual sync button just
+    // to see the latest remote changes.
+    LaunchedEffect(Unit) {
+        viewModel.syncFromRemote()
+    }
 
     // Surface sync state as Snackbar messages
     LaunchedEffect(syncState) {
@@ -339,7 +345,7 @@ fun TodoListScreen(
                 uiState.isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
-                todos.isEmpty() -> {
+                groups.isEmpty() -> {
                     Column(
                         modifier            = Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally

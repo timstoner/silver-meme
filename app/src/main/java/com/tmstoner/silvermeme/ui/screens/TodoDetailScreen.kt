@@ -1,5 +1,6 @@
 package com.tmstoner.silvermeme.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -17,6 +18,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -26,6 +30,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +53,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.LevelOfEffort
+import com.tmstoner.silvermeme.data.model.RecurrenceRule
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.ui.components.RecurrenceDialog
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -58,23 +65,12 @@ import java.util.UUID
 
 private val DATE_DISPLAY = DateTimeFormatter.ofPattern("MMM d, yyyy")
 
-private fun recurrenceLabel(value: String): String = when (value) {
-    "daily"   -> "Daily"
-    "weekly"  -> "Weekly"
-    "monthly" -> "Monthly"
-    else      -> "Does not repeat"
-}
-
 /**
  * Screen for creating a new TODO item or editing an existing one.
  *
- * Fields:
- *  - Title (required)
- *  - Notes (markdown body)
- *  - Due date (date picker)
- *  - Priority (dropdown)
- *  - Location
- *  - Tags (chip input)
+ * Always visible: Title, Priority, Due date, Notes.
+ * Behind the "Show more options" toggle (auto-expanded when editing a task that
+ * already uses them): Level of Effort, Project/folder, Location, Tags, Schedule.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -87,23 +83,34 @@ fun TodoDetailScreen(
     val isEditing = existingTodo != null
 
     // Form state
-    var title       by remember { mutableStateOf(existingTodo?.title       ?: "") }
-    var notes       by remember { mutableStateOf(existingTodo?.content     ?: "") }
-    var dueDate     by remember { mutableStateOf(existingTodo?.dueDate) }
-    var priority    by remember { mutableStateOf(existingTodo?.priority    ?: Priority.MEDIUM) }
-    var location    by remember { mutableStateOf(existingTodo?.location    ?: "") }
-    var tags        by remember { mutableStateOf(existingTodo?.tags        ?: emptyList()) }
-    var tagInput    by remember { mutableStateOf("") }
-    var titleError  by remember { mutableStateOf(false) }
-    var recurrence  by remember { mutableStateOf(existingTodo?.recurrence  ?: "none") }
-    var loe         by remember { mutableStateOf(existingTodo?.loe         ?: 0) }
-    var project     by remember { mutableStateOf(existingTodo?.project     ?: "") }
+    var title          by remember { mutableStateOf(existingTodo?.title       ?: "") }
+    var notes          by remember { mutableStateOf(existingTodo?.content     ?: "") }
+    var dueDate        by remember { mutableStateOf(existingTodo?.dueDate) }
+    var priority       by remember { mutableStateOf(existingTodo?.priority    ?: Priority.MEDIUM) }
+    var location       by remember { mutableStateOf(existingTodo?.location    ?: "") }
+    var tags           by remember { mutableStateOf(existingTodo?.tags        ?: emptyList()) }
+    var tagInput       by remember { mutableStateOf("") }
+    var titleError     by remember { mutableStateOf(false) }
+    var recurrenceRule by remember { mutableStateOf(RecurrenceRule.parse(existingTodo?.recurrence ?: "none")) }
+    var loe            by remember { mutableStateOf(existingTodo?.loe         ?: 0) }
+    var project        by remember { mutableStateOf(existingTodo?.project     ?: "") }
 
-    var showDatePicker    by remember { mutableStateOf(false) }
-    var showPriorityMenu  by remember { mutableStateOf(false) }
-    var showRecurrenceMenu by remember { mutableStateOf(false) }
-    var showLoeMenu       by remember { mutableStateOf(false) }
-    var showProjectMenu   by remember { mutableStateOf(false) }
+    // Whether any optional field already has non-default data (so editing an
+    // existing task with those fields set doesn't hide them by default).
+    val hasOptionalData = existingTodo != null && (
+        existingTodo.loe > 0 ||
+        existingTodo.project.isNotBlank() ||
+        !existingTodo.location.isNullOrBlank() ||
+        existingTodo.tags.isNotEmpty() ||
+        existingTodo.recurrence != "none"
+    )
+    var showOptionalFields by remember { mutableStateOf(hasOptionalData) }
+
+    var showDatePicker      by remember { mutableStateOf(false) }
+    var showPriorityMenu    by remember { mutableStateOf(false) }
+    var showScheduleDialog  by remember { mutableStateOf(false) }
+    var showLoeMenu         by remember { mutableStateOf(false) }
+    var showProjectMenu     by remember { mutableStateOf(false) }
     val availableProjects = viewModel.getAvailableProjects()
 
     // Navigate back after a successful save
@@ -135,7 +142,7 @@ fun TodoDetailScreen(
             isCompleted = existingTodo?.isCompleted ?: false,
             filePath    = filePath,
             createdAt   = existingTodo?.createdAt ?: java.time.LocalDateTime.now(),
-            recurrence  = recurrence,
+            recurrence  = recurrenceRule.toStorageString(),
             loe         = loe
         )
     }
@@ -234,142 +241,6 @@ fun TodoDetailScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // ── Recurrence ────────────────────────────────────────────────────
-            ExposedDropdownMenuBox(
-                expanded        = showRecurrenceMenu,
-                onExpandedChange = { showRecurrenceMenu = it }
-            ) {
-                OutlinedTextField(
-                    value           = recurrenceLabel(recurrence),
-                    onValueChange   = {},
-                    readOnly        = true,
-                    label           = { Text("Repeat") },
-                    trailingIcon    = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showRecurrenceMenu) },
-                    modifier        = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor()
-                )
-                ExposedDropdownMenu(
-                    expanded        = showRecurrenceMenu,
-                    onDismissRequest = { showRecurrenceMenu = false }
-                ) {
-                    listOf("none", "daily", "weekly", "monthly").forEach { r ->
-                        DropdownMenuItem(
-                            text    = { Text(recurrenceLabel(r)) },
-                            onClick = { recurrence = r; showRecurrenceMenu = false }
-                        )
-                    }
-                }
-            }
-
-            // ── Level of Effort (LOE) ────────────────────────────────────────────
-            ExposedDropdownMenuBox(
-                expanded        = showLoeMenu,
-                onExpandedChange = { showLoeMenu = it }
-            ) {
-                OutlinedTextField(
-                    value           = LevelOfEffort.fromPoints(loe).label,
-                    onValueChange   = {},
-                    readOnly        = true,
-                    label           = { Text("LOE") },
-                    trailingIcon    = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showLoeMenu) },
-                    modifier        = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor()
-                )
-                ExposedDropdownMenu(
-                    expanded        = showLoeMenu,
-                    onDismissRequest = { showLoeMenu = false }
-                ) {
-                    LevelOfEffort.entries.forEach { level ->
-                        DropdownMenuItem(
-                            text    = { Text(level.label) },
-                            onClick = { loe = level.points; showLoeMenu = false }
-                        )
-                    }
-                }
-            }
-
-            // ── Project / folder ──────────────────────────────────────────────
-            ExposedDropdownMenuBox(
-                expanded        = showProjectMenu && availableProjects.isNotEmpty(),
-                onExpandedChange = { showProjectMenu = it }
-            ) {
-                OutlinedTextField(
-                    value         = project,
-                    onValueChange = { project = it; showProjectMenu = true },
-                    label         = { Text("Project / folder") },
-                    placeholder   = { Text("None") },
-                    trailingIcon  = if (availableProjects.isNotEmpty()) {
-                        { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showProjectMenu) }
-                    } else null,
-                    modifier      = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(),
-                    supportingText = { Text("Group related tasks together") }
-                )
-                if (availableProjects.isNotEmpty()) {
-                    ExposedDropdownMenu(
-                        expanded        = showProjectMenu,
-                        onDismissRequest = { showProjectMenu = false }
-                    ) {
-                        availableProjects.forEach { p ->
-                            DropdownMenuItem(
-                                text    = { Text(p) },
-                                onClick = { project = p; showProjectMenu = false }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ── Location ──────────────────────────────────────────────────────
-            OutlinedTextField(
-                value         = location,
-                onValueChange = { location = it },
-                label         = { Text("Location") },
-                singleLine    = true,
-                modifier      = Modifier.fillMaxWidth()
-            )
-
-            // ── Tags ──────────────────────────────────────────────────────────
-            Column {
-                Text("Tags", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(4.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    tags.forEach { tag ->
-                        AssistChip(
-                            onClick      = { tags = tags - tag },
-                            label        = { Text("#$tag") },
-                            trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove tag") }
-                        )
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value         = tagInput,
-                        onValueChange = { tagInput = it },
-                        label         = { Text("Add tag") },
-                        singleLine    = true,
-                        modifier      = Modifier.weight(1f)
-                    )
-                    IconButton(
-                        onClick  = {
-                            val cleaned = tagInput.trim().lowercase().replace(' ', '-')
-                            if (cleaned.isNotEmpty() && !tags.contains(cleaned)) {
-                                tags = tags + cleaned
-                            }
-                            tagInput = ""
-                        }
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Add tag")
-                    }
-                }
-            }
-
             // ── Notes (markdown body) ─────────────────────────────────────────
             OutlinedTextField(
                 value         = notes,
@@ -378,6 +249,149 @@ fun TodoDetailScreen(
                 minLines      = 4,
                 modifier      = Modifier.fillMaxWidth()
             )
+
+            HorizontalDivider()
+
+            // ── Show/hide optional fields ────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showOptionalFields = !showOptionalFields },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    if (showOptionalFields) "Hide options" else "Show more options",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    if (showOptionalFields) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (showOptionalFields) "Hide options" else "Show more options",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            if (showOptionalFields) {
+                // ── Schedule (recurrence) ────────────────────────────────────
+                OutlinedTextField(
+                    value         = recurrenceRule.summary(),
+                    onValueChange = {},
+                    readOnly      = true,
+                    label         = { Text("Schedule") },
+                    leadingIcon   = { Icon(Icons.Filled.Schedule, contentDescription = null) },
+                    trailingIcon  = { TextButton(onClick = { showScheduleDialog = true }) { Text("Edit") } },
+                    modifier      = Modifier.fillMaxWidth()
+                )
+
+                // ── Level of Effort (LOE) ────────────────────────────────────
+                ExposedDropdownMenuBox(
+                    expanded        = showLoeMenu,
+                    onExpandedChange = { showLoeMenu = it }
+                ) {
+                    OutlinedTextField(
+                        value           = LevelOfEffort.fromPoints(loe).label,
+                        onValueChange   = {},
+                        readOnly        = true,
+                        label           = { Text("LOE") },
+                        trailingIcon    = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showLoeMenu) },
+                        modifier        = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded        = showLoeMenu,
+                        onDismissRequest = { showLoeMenu = false }
+                    ) {
+                        LevelOfEffort.entries.forEach { level ->
+                            DropdownMenuItem(
+                                text    = { Text(level.label) },
+                                onClick = { loe = level.points; showLoeMenu = false }
+                            )
+                        }
+                    }
+                }
+
+                // ── Project / folder ─────────────────────────────────────────
+                ExposedDropdownMenuBox(
+                    expanded        = showProjectMenu && availableProjects.isNotEmpty(),
+                    onExpandedChange = { showProjectMenu = it }
+                ) {
+                    OutlinedTextField(
+                        value         = project,
+                        onValueChange = { project = it; showProjectMenu = true },
+                        label         = { Text("Project / folder") },
+                        placeholder   = { Text("None") },
+                        trailingIcon  = if (availableProjects.isNotEmpty()) {
+                            { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showProjectMenu) }
+                        } else null,
+                        modifier      = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        supportingText = { Text("Group related tasks together") }
+                    )
+                    if (availableProjects.isNotEmpty()) {
+                        ExposedDropdownMenu(
+                            expanded        = showProjectMenu,
+                            onDismissRequest = { showProjectMenu = false }
+                        ) {
+                            availableProjects.forEach { p ->
+                                DropdownMenuItem(
+                                    text    = { Text(p) },
+                                    onClick = { project = p; showProjectMenu = false }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Location ──────────────────────────────────────────────────
+                OutlinedTextField(
+                    value         = location,
+                    onValueChange = { location = it },
+                    label         = { Text("Location") },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth()
+                )
+
+                // ── Tags ──────────────────────────────────────────────────────
+                Column {
+                    Text("Tags", style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.height(4.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        tags.forEach { tag ->
+                            AssistChip(
+                                onClick      = { tags = tags - tag },
+                                label        = { Text("#$tag") },
+                                trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove tag") }
+                            )
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value         = tagInput,
+                            onValueChange = { tagInput = it },
+                            label         = { Text("Add tag") },
+                            singleLine    = true,
+                            modifier      = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick  = {
+                                val cleaned = tagInput.trim().lowercase().replace(' ', '-')
+                                if (cleaned.isNotEmpty() && !tags.contains(cleaned)) {
+                                    tags = tags + cleaned
+                                }
+                                tagInput = ""
+                            }
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Add tag")
+                        }
+                    }
+                }
+            }
 
             Spacer(Modifier.height(72.dp)) // Room for FAB
         }
@@ -409,5 +423,14 @@ fun TodoDetailScreen(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+    // ── Schedule (recurrence) dialog ────────────────────────────────────────────
+    if (showScheduleDialog) {
+        RecurrenceDialog(
+            initial   = recurrenceRule,
+            onConfirm = { rule -> recurrenceRule = rule; showScheduleDialog = false },
+            onDismiss = { showScheduleDialog = false }
+        )
     }
 }

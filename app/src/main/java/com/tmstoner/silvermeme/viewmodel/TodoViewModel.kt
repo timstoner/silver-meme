@@ -4,15 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tmstoner.silvermeme.data.model.Priority
+import com.tmstoner.silvermeme.data.model.RecurrenceRule
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.repository.GitRepository
 import com.tmstoner.silvermeme.data.repository.TodoDataSource
 import com.tmstoner.silvermeme.data.storage.SettingsStore
 import com.tmstoner.silvermeme.util.FilterStateSerializer
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -128,16 +132,11 @@ class TodoViewModel(
         viewModelScope.launch {
             // Mark current task as complete
             saveTodo(todo.withCompletion(!todo.isCompleted))
-            
+
             // If marking complete and recurrence is set, spawn next occurrence (Track E2)
             if (!todo.isCompleted && todo.recurrence != "none" && todo.dueDate != null) {
-                val nextDueDate = when (todo.recurrence) {
-                    "daily" -> todo.dueDate!!.plusDays(1)
-                    "weekly" -> todo.dueDate!!.plusWeeks(1)
-                    "monthly" -> todo.dueDate!!.plusMonths(1)
-                    else -> null
-                }
-                
+                val nextDueDate = RecurrenceRule.parse(todo.recurrence).nextDueDate(todo.dueDate!!)
+
                 if (nextDueDate != null) {
                     val nextOccurrence = todo.copy(
                         id = java.util.UUID.randomUUID().toString(),
@@ -212,24 +211,24 @@ class TodoViewModel(
     }
 
     /** Applies the current [FilterState] to [TodoUiState.todos]. */
-    fun filteredTodos(): List<TodoItem> {
-        val todos  = _uiState.value.todos
-        val filter = _filterState.value
-        val today  = LocalDate.now()
-
-        val matched = todos.filter { matchesFilter(it, filter, today) }
-        return sortTodos(matched, filter.sortOrder)
-    }
+    fun filteredTodos(): List<TodoItem> = computeVisibleTodos(_uiState.value, _filterState.value)
 
     /**
      * Groups the filtered todo list into semantic due-date buckets (Track F):
      * Overdue → Today → Tomorrow → This Week → Next Week → Later → No Due Date.
      * Empty groups are omitted. Items within each group respect the active sort order.
      */
-    fun groupedTodos(): List<TodoGroup> {
-        val filter = _filterState.value
+    fun groupedTodos(): List<TodoGroup> = computeGroups(_uiState.value, _filterState.value)
+
+    private fun computeVisibleTodos(state: TodoUiState, filter: FilterState): List<TodoItem> {
+        val today = LocalDate.now()
+        val matched = state.todos.filter { matchesFilter(it, filter, today) }
+        return sortTodos(matched, filter.sortOrder)
+    }
+
+    private fun computeGroups(state: TodoUiState, filter: FilterState): List<TodoGroup> {
         val today  = LocalDate.now()
-        val matched = _uiState.value.todos.filter { matchesFilter(it, filter, today) }
+        val matched = state.todos.filter { matchesFilter(it, filter, today) }
 
         val overdue  = mutableListOf<TodoItem>()
         val todayList = mutableListOf<TodoItem>()
@@ -262,6 +261,21 @@ class TodoViewModel(
             noDate.takeIf { it.isNotEmpty() }?.let { TodoGroup("No Due Date", sortTodos(it, filter.sortOrder)) }
         )
     }
+
+    /**
+     * Reactive view of the filtered todo list (Compose-observable). Unlike [filteredTodos],
+     * this recomputes automatically whenever [uiState] or [filterState] changes, so the UI
+     * updates immediately when the user changes a filter/folder/priority without any manual
+     * refresh action.
+     */
+    val visibleTodos: StateFlow<List<TodoItem>> =
+        combine(_uiState, _filterState) { state, filter -> computeVisibleTodos(state, filter) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Reactive, Compose-observable version of [groupedTodos]. See [visibleTodos]. */
+    val visibleGroups: StateFlow<List<TodoGroup>> =
+        combine(_uiState, _filterState) { state, filter -> computeGroups(state, filter) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // ── Filter persistence (Track F) ────────────────────────────────────────────
 
