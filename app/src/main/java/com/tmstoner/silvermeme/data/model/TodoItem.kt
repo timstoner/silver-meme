@@ -48,7 +48,9 @@ data class TodoItem(
     val createdAt: LocalDateTime = LocalDateTime.now(),
     val updatedAt: LocalDateTime = LocalDateTime.now(),
     /** Subtasks as checklist items (Track E1). Rendered as markdown `- [ ]` / `- [x]` in body. */
-    val checklist: List<ChecklistItem> = emptyList()
+    val checklist: List<ChecklistItem> = emptyList(),
+    /** Recurrence pattern for this task (Track E2). Values: "daily", "weekly", "monthly", "none". */
+    val recurrence: String = "none"
 ) {
     /** Returns a copy marked as complete/incomplete. */
     fun withCompletion(completed: Boolean) = copy(isCompleted = completed, updatedAt = LocalDateTime.now())

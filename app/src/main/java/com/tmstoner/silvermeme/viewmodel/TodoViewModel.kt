@@ -115,7 +115,30 @@ class TodoViewModel(private val repository: TodoDataSource) : ViewModel() {
     }
 
     fun toggleComplete(todo: TodoItem) {
-        saveTodo(todo.withCompletion(!todo.isCompleted))
+        viewModelScope.launch {
+            // Mark current task as complete
+            saveTodo(todo.withCompletion(!todo.isCompleted))
+            
+            // If marking complete and recurrence is set, spawn next occurrence (Track E2)
+            if (!todo.isCompleted && todo.recurrence != "none" && todo.dueDate != null) {
+                val nextDueDate = when (todo.recurrence) {
+                    "daily" -> todo.dueDate!!.plusDays(1)
+                    "weekly" -> todo.dueDate!!.plusWeeks(1)
+                    "monthly" -> todo.dueDate!!.plusMonths(1)
+                    else -> null
+                }
+                
+                if (nextDueDate != null) {
+                    val nextOccurrence = todo.copy(
+                        id = java.util.UUID.randomUUID().toString(),
+                        isCompleted = false,
+                        dueDate = nextDueDate,
+                        updatedAt = java.time.LocalDateTime.now()
+                    )
+                    saveTodo(nextOccurrence)
+                }
+            }
+        }
     }
 
     fun deleteTodo(todo: TodoItem) {

@@ -120,7 +120,8 @@ class MarkdownFileManager(private val vaultDir: File) {
                 filePath = relativePath,
                 createdAt = parseDateTime(frontmatter["created"]) ?: fileCreationTime(file),
                 updatedAt = parseDateTime(frontmatter["updated"]) ?: LocalDateTime.now(),
-                checklist = checklist
+                checklist = checklist,
+                recurrence = frontmatter["recurrence"]?.lowercase()?.trim() ?: "none"
             )
         } catch (e: Exception) {
             null
@@ -142,6 +143,7 @@ class MarkdownFileManager(private val vaultDir: File) {
             appendLine("tags:")
             todo.tags.forEach { appendLine("  - $it") }
         }
+        if (todo.recurrence != "none") appendLine("recurrence: ${todo.recurrence}")
         appendLine("created: ${todo.createdAt.format(DATETIME_FORMATTER)}")
         appendLine("updated: ${todo.updatedAt.format(DATETIME_FORMATTER)}")
         appendLine(FRONTMATTER_DELIMITER)
