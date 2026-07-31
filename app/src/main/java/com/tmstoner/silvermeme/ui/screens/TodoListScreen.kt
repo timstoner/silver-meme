@@ -66,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.ui.components.ConflictResolutionDialog
 import com.tmstoner.silvermeme.ui.components.TodoItemCard
 import com.tmstoner.silvermeme.viewmodel.SortOrder
 import com.tmstoner.silvermeme.viewmodel.SyncState
@@ -99,6 +100,8 @@ fun TodoListScreen(
     var showSortMenu       by remember { mutableStateOf(false) }
     var showSearchBar      by remember { mutableStateOf(false) }
     var searchQuery        by remember { mutableStateOf("") }
+    var showConflictDialog by remember { mutableStateOf(false) }
+    var conflictFiles      by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -119,6 +122,11 @@ fun TodoListScreen(
             is SyncState.Failure -> {
                 scope.launch { snackbarHostState.showSnackbar("Sync error: ${(syncState as SyncState.Failure).message}") }
                 viewModel.clearSyncState()
+            }
+            is SyncState.Conflict -> {
+                conflictFiles = (syncState as SyncState.Conflict).files
+                showConflictDialog = true
+                // Do not clearSyncState here — do it after user resolves
             }
             else -> Unit
         }
@@ -434,6 +442,28 @@ fun TodoListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Conflict resolution dialog — shown when a pull/push results in a merge conflict
+    if (showConflictDialog) {
+        ConflictResolutionDialog(
+            conflictFiles = conflictFiles,
+            onKeepLocal = {
+                showConflictDialog = false
+                viewModel.clearSyncState()
+                scope.launch { snackbarHostState.showSnackbar("Kept local version") }
+            },
+            onKeepRemote = {
+                showConflictDialog = false
+                viewModel.clearSyncState()
+                viewModel.syncFromRemote()
+                scope.launch { snackbarHostState.showSnackbar("Synced remote version") }
+            },
+            onDismiss = {
+                showConflictDialog = false
+                scope.launch { snackbarHostState.showSnackbar("Conflict unresolved — sync pending") }
             }
         )
     }

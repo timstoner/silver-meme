@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
 
                     val todoViewModel: TodoViewModel = viewModel(
-                        factory = TodoViewModel.Factory(app.todoRepository, app.settingsDataStore)
+                        factory = TodoViewModel.Factory(app.todoRepository, app.settingsDataStore, app.notificationScheduler)
                     )
 
                     AppNavGraph(
