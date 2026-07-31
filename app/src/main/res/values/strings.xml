@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SilverMeme – Obsidian Todos</string>
+    <string name="action_sync">Sync</string>
+    <string name="action_add">Add task</string>
+    <string name="action_settings">Settings</string>
+    <string name="label_title">Title</string>
+    <string name="label_notes">Notes</string>
+    <string name="label_due_date">Due date</string>
+    <string name="label_priority">Priority</string>
+    <string name="label_location">Location</string>
+    <string name="label_tags">Tags</string>
+    <string name="empty_list_title">No todos found</string>
+    <string name="empty_list_subtitle">Tap + to create one, or pull to sync</string>
+    <string name="delete_confirm_title">Delete task?</string>
+    <string name="delete_confirm_message">This task will be permanently deleted.</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_save">Save</string>
+    <string name="settings_git_remote">Git Remote</string>
+    <string name="settings_git_url">Remote URL</string>
+    <string name="settings_git_username">Username</string>
+    <string name="settings_git_token">Personal Access Token</string>
+    <string name="settings_saved">Settings saved</string>
+    <string name="sync_pulling">Pulling from remote…</string>
+    <string name="sync_pushing">Pushing to remote…</string>
+    <string name="sync_success">Sync complete</string>
+    <string name="sync_error_prefix">Sync error: </string>
+</resources>
