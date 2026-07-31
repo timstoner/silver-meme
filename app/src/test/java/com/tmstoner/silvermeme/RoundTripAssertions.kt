@@ -12,4 +12,7 @@ fun assertTodoRoundTrip(expected: TodoItem, actual: TodoItem) {
     assertEquals(expected.location, actual.location)
     assertEquals(expected.tags, actual.tags)
     assertEquals(expected.isCompleted, actual.isCompleted)
+    // createdAt is not persisted in markdown, so we don't compare it
+    // TODO: Track E will add assertions for new frontmatter fields here
 }
+
