@@ -114,6 +114,14 @@ class TodoRepository(
     private suspend fun syncIfConfigured() {
         val remoteUrl = settings.gitRemoteUrl.first()
         if (remoteUrl.isBlank()) return
-        push()
+        // Pull first to integrate remote changes before pushing; a non-fast-forward
+        // push is silently rejected by the remote otherwise.
+        val pullResult = pull()
+        if (pullResult is GitRepository.GitResult.Error) {
+            // Log the failure but don't block: the local write already succeeded.
+            android.util.Log.w("TodoRepository", "pull failed before push: ${pullResult.message}")
+            return
+        }
+        push("SilverMeme: sync vault")
     }
 }

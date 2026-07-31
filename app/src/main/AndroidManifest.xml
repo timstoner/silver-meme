@@ -10,13 +10,15 @@
         android:maxSdkVersion="29" />
     <!-- Notification permissions (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Reschedule reminders after device reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Exact alarm for reminders -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
-        android:minSdkVersion="31" />
+    <!-- SCHEDULE_EXACT_ALARM removed: WorkManager with delay does not require it,
+         and it is a Play Store policy risk on API 31+. -->
 
     <application
         android:name=".SilverMemeApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -33,6 +35,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver android:name=".notifications.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 
