@@ -185,6 +185,16 @@ class TodoViewModel(
                 val completed = todo.withCompletion(!todo.isCompleted)
                 doSave(completed, completed.filePath.takeIf { it.isNotBlank() })
 
+                // The completed/uncompleted task's own reminder is no longer relevant:
+                // cancel it either way (re-scheduled below if un-completing with a due date).
+                if (completed.isCompleted) {
+                    notificationScheduler?.cancel(completed.id)
+                } else if (completed.dueDate != null) {
+                    notificationScheduler?.schedule(completed)
+                } else {
+                    notificationScheduler?.cancel(completed.id)
+                }
+
                 // If marking complete and recurrence is set, spawn next occurrence (Track E2).
                 // Bug 3/4 fix: clear filePath so storage derives a fresh, collision-safe filename.
                 if (!todo.isCompleted && todo.recurrence != "none" && todo.dueDate != null) {
@@ -198,6 +208,8 @@ class TodoViewModel(
                             updatedAt = java.time.LocalDateTime.now()
                         )
                         doSave(nextOccurrence, null)
+                        // Schedule the reminder for the next iteration's due date.
+                        notificationScheduler?.schedule(nextOccurrence)
                     }
                 }
                 doLoad()
