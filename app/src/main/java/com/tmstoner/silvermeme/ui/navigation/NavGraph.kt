@@ -3,16 +3,21 @@ package com.tmstoner.silvermeme.ui.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
+import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.ui.screens.SettingsScreen
 import com.tmstoner.silvermeme.ui.screens.TabletTodoLayout
 import com.tmstoner.silvermeme.ui.screens.TodoDetailScreen
@@ -42,7 +47,12 @@ fun AppNavGraph(
         navController = navController,
         startDestination = Routes.TODO_LIST
     ) {
-        composable(Routes.TODO_LIST) {
+        composable(
+            route = Routes.TODO_LIST,
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "silvermeme://todo/list" }
+            )
+        ) {
             if (isTablet) {
                 TabletTodoLayout(
                     viewModel      = todoViewModel,
@@ -60,7 +70,12 @@ fun AppNavGraph(
             }
         }
 
-        composable(Routes.TODO_NEW) {
+        composable(
+            route = Routes.TODO_NEW,
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "silvermeme://todo/new" }
+            )
+        ) {
             TodoDetailScreen(
                 viewModel = todoViewModel,
                 existingTodo = null,
@@ -70,7 +85,10 @@ fun AppNavGraph(
 
         composable(
             route = Routes.TODO_EDIT,
-            arguments = listOf(navArgument("todoId") { type = NavType.StringType })
+            arguments = listOf(navArgument("todoId") { type = NavType.StringType }),
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "silvermeme://todo/edit?todoId={todoId}" }
+            )
         ) { backStackEntry ->
             val todoId = backStackEntry.arguments?.getString("todoId").orEmpty()
             val uiState by todoViewModel.uiState.collectAsStateWithLifecycle()
@@ -79,6 +97,13 @@ fun AppNavGraph(
             if (uiState.isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
+                }
+            } else if (todo == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = stringResource(R.string.todo_not_found),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
             } else {
                 TodoDetailScreen(

@@ -2,6 +2,7 @@ package com.tmstoner.silvermeme.viewmodel
 
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
 import com.tmstoner.silvermeme.data.repository.GitRepository
 import com.tmstoner.silvermeme.data.repository.TodoDataSource
 import kotlinx.coroutines.Dispatchers
@@ -159,6 +160,9 @@ private class FakeTodoDataSource(
     val saved = mutableListOf<TodoItem>()
 
     override suspend fun getTodos(): List<TodoItem> = todos.toList()
+
+    override suspend fun getWidgetTodoSnapshot(today: LocalDate): WidgetTodoSnapshot =
+        WidgetTodoSnapshot.fromTodos(todos, today)
 
     override suspend fun saveTodo(todo: TodoItem, previousFilePath: String?): TodoItem {
         saved += todo

@@ -1,9 +1,16 @@
 package com.tmstoner.silvermeme.data.repository
 
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
+import java.time.LocalDate
 
 interface TodoDataSource {
     suspend fun getTodos(): List<TodoItem>
+    /**
+     * Returns incomplete tasks due today or earlier, split into overdue and today buckets.
+     * Results are sorted by due date ascending, then priority descending, then title/id.
+     */
+    suspend fun getWidgetTodoSnapshot(today: LocalDate = LocalDate.now()): WidgetTodoSnapshot
     suspend fun saveTodo(todo: TodoItem, previousFilePath: String? = null): TodoItem
     suspend fun deleteTodo(todo: TodoItem)
     /** Moves [todo] to trash and returns the updated item with its new filePath. */
