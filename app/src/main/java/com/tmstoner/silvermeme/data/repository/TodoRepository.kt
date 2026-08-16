@@ -1,6 +1,7 @@
 package com.tmstoner.silvermeme.data.repository
 
 import android.content.Context
+import com.tmstoner.silvermeme.data.model.SampleDataProvider
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
 import com.tmstoner.silvermeme.data.storage.SettingsStore
@@ -163,5 +164,36 @@ class TodoRepository(
             return
         }
         push("SilverMeme: sync vault")
+    }
+
+    /**
+     * Initializes the vault with sample TODO items if no existing tasks are present.
+     * This provides a good onboarding experience for first-time users, showing them
+     * the app's capabilities with realistic lorem ipsum content and various task states.
+     *
+     * Safe to call multiple times — no-op if tasks already exist.
+     */
+    suspend fun initializeSampleDataIfNeeded() = withContext(Dispatchers.IO) {
+        val existingTodos = getTodos()
+        if (existingTodos.isNotEmpty()) {
+            // Vault already has data; don't add samples
+            return@withContext
+        }
+
+        // Check if the tasks folder exists but is empty
+        val vaultDir = resolveVaultDir()
+        val tasksDir = File(vaultDir, MarkdownFileManager.TASKS_FOLDER)
+
+        val hasMarkdownFiles = if (tasksDir.exists()) {
+            tasksDir.walk().any { it.isFile && it.extension == "md" }
+        } else {
+            false
+        }
+
+        if (!hasMarkdownFiles) {
+            // Vault is empty; populate with sample data
+            val sampleTodos = SampleDataProvider.generateSampleTodos()
+            bulkSave(sampleTodos)
+        }
     }
 }

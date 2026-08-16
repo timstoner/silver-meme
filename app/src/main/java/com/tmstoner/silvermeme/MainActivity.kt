@@ -10,12 +10,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
 import com.tmstoner.silvermeme.ui.navigation.AppNavGraph
 import com.tmstoner.silvermeme.ui.theme.SilvermemeTheme
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -23,6 +25,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val app = application as SilverMemeApplication
+
+        // Initialize sample data on first launch if vault is empty
+        lifecycleScope.launch {
+            app.todoRepository.initializeSampleDataIfNeeded()
+        }
 
         setContent {
             val settingsViewModel: SettingsViewModel = viewModel(
