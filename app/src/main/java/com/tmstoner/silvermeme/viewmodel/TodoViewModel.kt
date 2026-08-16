@@ -572,7 +572,7 @@ class TodoViewModel(
 
 data class TodoUiState(
     val todos: List<TodoItem> = emptyList(),
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val errorMessage: String? = null
 )
@@ -607,4 +607,3 @@ sealed class SyncState {
     data class Failure(val message: String) : SyncState()
     data class Conflict(val files: List<String>) : SyncState()
 }
-
