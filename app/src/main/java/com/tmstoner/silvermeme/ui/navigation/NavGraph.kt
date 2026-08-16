@@ -14,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.tmstoner.silvermeme.ui.screens.SettingsScreen
+import com.tmstoner.silvermeme.ui.screens.TabletTodoLayout
 import com.tmstoner.silvermeme.ui.screens.TodoDetailScreen
 import com.tmstoner.silvermeme.ui.screens.TodoListScreen
 import com.tmstoner.silvermeme.ui.screens.TrashScreen
@@ -34,20 +35,29 @@ object Routes {
 fun AppNavGraph(
     navController: NavHostController,
     todoViewModel: TodoViewModel,
-    settingsViewModel: SettingsViewModel
+    settingsViewModel: SettingsViewModel,
+    isTablet: Boolean = false
 ) {
     NavHost(
         navController = navController,
         startDestination = Routes.TODO_LIST
     ) {
         composable(Routes.TODO_LIST) {
-            TodoListScreen(
-                viewModel     = todoViewModel,
-                onAddTodo     = { navController.navigate(Routes.TODO_NEW) },
-                onEditTodo    = { todo -> navController.navigate(Routes.todoEdit(todo.id)) },
-                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                onOpenTrash   = { navController.navigate(Routes.TRASH) }
-            )
+            if (isTablet) {
+                TabletTodoLayout(
+                    viewModel      = todoViewModel,
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenTrash    = { navController.navigate(Routes.TRASH) }
+                )
+            } else {
+                TodoListScreen(
+                    viewModel      = todoViewModel,
+                    onAddTodo      = { navController.navigate(Routes.TODO_NEW) },
+                    onEditTodo     = { todo -> navController.navigate(Routes.todoEdit(todo.id)) },
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenTrash    = { navController.navigate(Routes.TRASH) }
+                )
+            }
         }
 
         composable(Routes.TODO_NEW) {

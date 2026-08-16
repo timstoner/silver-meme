@@ -7,6 +7,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -21,6 +24,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -44,6 +48,10 @@ class MainActivity : ComponentActivity() {
                 else    -> isSystemInDarkTheme()
             }
 
+            // Detect tablet landscape: width ≥ Medium (≥ 600 dp)
+            val windowSizeClass = calculateWindowSizeClass(this)
+            val isTablet = windowSizeClass.widthSizeClass >= WindowWidthSizeClass.Medium
+
             SilvermemeTheme(darkTheme = useDarkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -58,7 +66,8 @@ class MainActivity : ComponentActivity() {
                     AppNavGraph(
                         navController     = navController,
                         todoViewModel     = todoViewModel,
-                        settingsViewModel = settingsViewModel
+                        settingsViewModel = settingsViewModel,
+                        isTablet          = isTablet
                     )
                 }
             }
