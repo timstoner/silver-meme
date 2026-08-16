@@ -48,6 +48,21 @@ class TodoViewModel(
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
+    // ── Two-pane detail selection (tablet layout) ─────────────────────────────
+
+    /**
+     * The id of the task currently displayed in the right pane of the tablet
+     * two-pane layout.  `null` means the "no task selected" empty-state prompt
+     * is shown.  Ignored entirely on phone / portrait-tablet layouts.
+     */
+    private val _selectedTodoId = MutableStateFlow<String?>(null)
+    val selectedTodoId: StateFlow<String?> = _selectedTodoId.asStateFlow()
+
+    /** Select a task for the detail pane (tablet two-pane). */
+    fun selectTodoForPane(id: String?) {
+        _selectedTodoId.value = id
+    }
+
     // ── Selection state for bulk actions (Track B2) ────────────────────────────
 
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
