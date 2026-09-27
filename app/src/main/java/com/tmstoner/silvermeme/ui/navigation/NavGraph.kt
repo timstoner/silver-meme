@@ -148,7 +148,8 @@ fun AppNavGraph(
             if (isTablet) {
                 TabletTodoLayout(
                     viewModel = todoViewModel,
-                    onOpenNavigationDrawer = openNavigationDrawer
+                    onOpenNavigationDrawer = openNavigationDrawer,
+                    onNavigateToDashboard = { navigateFromDrawer(Routes.DASHBOARD) }
                 )
             } else {
                 TodoListScreen(

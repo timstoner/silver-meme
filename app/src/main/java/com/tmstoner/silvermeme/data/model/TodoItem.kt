@@ -2,6 +2,7 @@ package com.tmstoner.silvermeme.data.model
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 
 /**
  * Represents a single TODO item backed by an Obsidian-compatible markdown file.
@@ -55,7 +56,14 @@ data class TodoItem(
      * Level of Effort estimate (Fibonacci scale, agile-style story points).
      * Valid values: 0 (not estimated), 1, 2, 3, 5, 8, 13.
      */
-    val loe: Int = 0
+    val loe: Int = 0,
+    /** Whether a due-date reminder should be scheduled. */
+    val reminderEnabled: Boolean = true,
+    /**
+     * User-selected local clock time for the reminder. Null means midnight on
+     * the due date; existing vault reminders therefore retain their old timing.
+     */
+    val reminderTime: LocalTime? = null
 ) {
     /** Returns a copy marked as complete/incomplete. */
     fun withCompletion(completed: Boolean) = copy(isCompleted = completed, updatedAt = LocalDateTime.now())

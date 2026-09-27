@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -43,6 +44,7 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
         private val KEY_AUTHOR_EMAIL      = stringPreferencesKey("author_email")
         private val KEY_THEME_MODE        = stringPreferencesKey("theme_mode")
         private val KEY_LAST_FILTER_STATE = stringPreferencesKey("last_filter_state")
+        private val KEY_PENDING_SYNC = booleanPreferencesKey("pending_sync")
 
         // EncryptedSharedPreferences key for the PAT
         private const val ENCRYPTED_PREFS_FILE = "secure_settings"
@@ -123,6 +125,22 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
     override val lastFilterState: Flow<String> = context.dataStore.data
         .map { it[KEY_LAST_FILTER_STATE] ?: "" }
 
+    override val pendingSync: Flow<Boolean> = context.dataStore.data
+        .map { it[KEY_PENDING_SYNC] ?: false }
+
+    override suspend fun snapshot(): SettingsSnapshot {
+        val preferences = context.dataStore.data.first()
+        return SettingsSnapshot(
+            gitRemoteUrl = preferences[KEY_GIT_REMOTE_URL] ?: "",
+            gitUsername = preferences[KEY_GIT_USERNAME] ?: "",
+            gitToken = encryptedPrefs.getString(KEY_ENCRYPTED_TOKEN, "") ?: "",
+            vaultPath = preferences[KEY_VAULT_PATH] ?: "",
+            authorName = preferences[KEY_AUTHOR_NAME] ?: "SilverMeme",
+            authorEmail = preferences[KEY_AUTHOR_EMAIL] ?: "silvermeme@local",
+            pendingSync = preferences[KEY_PENDING_SYNC] ?: false
+        )
+    }
+
     // ── Writes ────────────────────────────────────────────────────────────────
 
     override suspend fun setGitRemoteUrl(url: String) {
@@ -163,6 +181,10 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
 
     override suspend fun setLastFilterState(serialized: String) {
         context.dataStore.edit { it[KEY_LAST_FILTER_STATE] = serialized }
+    }
+
+    override suspend fun setPendingSync(pending: Boolean) {
+        context.dataStore.edit { it[KEY_PENDING_SYNC] = pending }
     }
 
     /** Returns a snapshot of all settings (non-reactive, for one-shot reads). */

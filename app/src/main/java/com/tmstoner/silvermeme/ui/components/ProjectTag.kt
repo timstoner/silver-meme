@@ -16,8 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import com.tmstoner.silvermeme.R
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * A small tag showing which project/folder a task belongs to (Track E3/F).
@@ -39,14 +40,14 @@ fun ProjectTag(project: String, modifier: Modifier = Modifier, onClick: (() -> U
     ) {
         Icon(
             imageVector        = Icons.Filled.Folder,
-            contentDescription = "Project",
+            contentDescription = stringResource(R.string.project_tag_description),
             tint               = MaterialTheme.colorScheme.secondary,
             modifier           = Modifier.size(12.dp)
         )
         Spacer(Modifier.width(3.dp))
         Text(
             text     = project,
-            fontSize = 11.sp,
+            style = MaterialTheme.typography.labelSmall,
             color    = MaterialTheme.colorScheme.secondary
         )
     }

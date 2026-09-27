@@ -47,6 +47,15 @@ class TodoViewModel(
 
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
+    val pendingSync: StateFlow<Boolean> = repository.pendingSync.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = false
+    )
+    private var lastAutomaticSyncAttemptMillis = 0L
+    private var lastFailedSyncOperation = FailedSyncOperation.PULL
+
+    private enum class FailedSyncOperation { PULL, PUSH, PENDING }
 
     // ── Two-pane detail selection (tablet layout) ─────────────────────────────
 
@@ -62,6 +71,9 @@ class TodoViewModel(
     fun selectTodoForPane(id: String?) {
         _selectedTodoId.value = id
     }
+
+    private fun upsertTodo(todos: List<TodoItem>, updated: TodoItem): List<TodoItem> =
+        todos.filterNot { it.id == updated.id } + updated
 
     // ── Selection state for bulk actions (Track B2) ────────────────────────────
 
@@ -80,6 +92,7 @@ class TodoViewModel(
 
     private val _trashedTodos = MutableStateFlow<List<TodoItem>>(emptyList())
     val trashedTodos: StateFlow<List<TodoItem>> = _trashedTodos.asStateFlow()
+    private var lastTrashedTodos: List<TodoItem> = emptyList()
 
     // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -87,6 +100,20 @@ class TodoViewModel(
         restoreFilterState()
         loadTodos()
         loadTrash()
+        viewModelScope.launch {
+            repository.automaticSyncEvents.collect { result ->
+                if (result is GitRepository.GitResult.Error ||
+                    result is GitRepository.GitResult.Conflict
+                ) {
+                    lastFailedSyncOperation = FailedSyncOperation.PENDING
+                }
+                _syncState.value = when (result) {
+                    GitRepository.GitResult.Success -> SyncState.Idle
+                    is GitRepository.GitResult.Error -> SyncState.Failure(result.message)
+                    is GitRepository.GitResult.Conflict -> SyncState.Conflict(result.files)
+                }
+            }
+        }
         // Purge trash items older than 30 days on startup.
         viewModelScope.launch { repository.purgeOldTrash() }
         // Debounce search input: persist to DataStore only after 250 ms of inactivity.
@@ -125,6 +152,7 @@ class TodoViewModel(
 
     /** Pulls from remote and refreshes the local list. */
     fun syncFromRemote() {
+        lastFailedSyncOperation = FailedSyncOperation.PULL
         viewModelScope.launch {
             _syncState.value = SyncState.Syncing("Pulling from remote…")
             when (val result = repository.pull()) {
@@ -142,13 +170,65 @@ class TodoViewModel(
         }
     }
 
+    /** Pulls on screen entry at most once per minute. */
+    fun syncFromRemoteIfStale() {
+        val now = System.currentTimeMillis()
+        if (now - lastAutomaticSyncAttemptMillis < AUTOMATIC_SYNC_MIN_INTERVAL_MILLIS) return
+        lastAutomaticSyncAttemptMillis = now
+        syncFromRemote()
+    }
+
     /** Pushes local changes to remote. */
     fun pushToRemote(message: String = "Update todos") {
+        lastFailedSyncOperation = FailedSyncOperation.PUSH
         viewModelScope.launch {
             _syncState.value = SyncState.Syncing("Pushing to remote…")
             when (val result = repository.push(message)) {
                 is GitRepository.GitResult.Success -> _syncState.value = SyncState.Success("Push complete")
                 is GitRepository.GitResult.Error   -> _syncState.value = SyncState.Failure(result.message)
+                is GitRepository.GitResult.Conflict -> _syncState.value = SyncState.Conflict(result.files)
+            }
+        }
+    }
+
+    /** Retries the repository's persisted pull-then-push operation. */
+    fun retryPendingSync() {
+        lastFailedSyncOperation = FailedSyncOperation.PENDING
+        viewModelScope.launch {
+            _syncState.value = SyncState.Syncing("Retrying synchronization…")
+            when (val result = repository.retryPendingSync()) {
+                GitRepository.GitResult.Success -> {
+                    loadTodos()
+                    _syncState.value = SyncState.Success("Sync complete")
+                }
+                is GitRepository.GitResult.Error -> _syncState.value = SyncState.Failure(result.message)
+                is GitRepository.GitResult.Conflict -> _syncState.value = SyncState.Conflict(result.files)
+            }
+        }
+    }
+
+    /**
+     * Repeats the operation that failed. Automatic write syncs use the durable
+     * pull-then-push retry; manual pulls and pushes retry their corresponding
+     * safe operation instead of falsely reporting success when no work is pending.
+     */
+    fun retryFailedSync() {
+        when (lastFailedSyncOperation) {
+            FailedSyncOperation.PULL -> syncFromRemote()
+            FailedSyncOperation.PUSH -> pushToRemote()
+            FailedSyncOperation.PENDING -> retryPendingSync()
+        }
+    }
+
+    fun resolveConflicts(files: List<String>, keepLocal: Boolean) {
+        viewModelScope.launch {
+            _syncState.value = SyncState.Syncing("Resolving sync conflicts…")
+            when (val result = repository.resolveConflicts(files, keepLocal)) {
+                GitRepository.GitResult.Success -> {
+                    loadTodos()
+                    _syncState.value = SyncState.Success("Conflicts resolved")
+                }
+                is GitRepository.GitResult.Error -> _syncState.value = SyncState.Failure(result.message)
                 is GitRepository.GitResult.Conflict -> _syncState.value = SyncState.Conflict(result.files)
             }
         }
@@ -164,16 +244,18 @@ class TodoViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             try {
-                doSave(todo, previousFilePath)
+                val saved = doSave(todo, previousFilePath)
                 // Schedule or cancel reminder based on completion/due-date state
-                if (todo.isCompleted) {
-                    notificationScheduler?.cancel(todo.id)
-                } else if (todo.dueDate != null) {
-                    notificationScheduler?.schedule(todo)
+                if (saved.isCompleted) {
+                    notificationScheduler?.cancel(saved.id)
+                } else if (saved.dueDate != null) {
+                    notificationScheduler?.schedule(saved)
                 } else {
-                    notificationScheduler?.cancel(todo.id)
+                    notificationScheduler?.cancel(saved.id)
                 }
-                doLoad()
+                _uiState.update {
+                    it.copy(todos = upsertTodo(it.todos, saved), isLoading = false, errorMessage = null)
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             } finally {
@@ -183,14 +265,8 @@ class TodoViewModel(
     }
 
     /** Suspending save — for use inside coroutines that need sequencing. */
-    private suspend fun doSave(todo: TodoItem, previousFilePath: String? = null) {
-        repository.saveTodo(todo, previousFilePath)
-    }
-
-    /** Suspending load — for use inside coroutines that need sequencing. */
-    private suspend fun doLoad() {
-        val todos = repository.getTodos()
-        _uiState.update { it.copy(todos = todos, isLoading = false) }
+    private suspend fun doSave(todo: TodoItem, previousFilePath: String? = null): TodoItem {
+        return repository.saveTodo(todo, previousFilePath)
     }
 
     fun toggleComplete(todo: TodoItem) {
@@ -198,7 +274,8 @@ class TodoViewModel(
             _uiState.update { it.copy(isSaving = true) }
             try {
                 val completed = todo.withCompletion(!todo.isCompleted)
-                doSave(completed, completed.filePath.takeIf { it.isNotBlank() })
+                val savedCompleted = doSave(completed, completed.filePath.takeIf { it.isNotBlank() })
+                var updatedTodos = upsertTodo(_uiState.value.todos, savedCompleted)
 
                 // The completed/uncompleted task's own reminder is no longer relevant:
                 // cancel it either way (re-scheduled below if un-completing with a due date).
@@ -222,12 +299,15 @@ class TodoViewModel(
                             filePath = "",   // force fresh filename derivation
                             updatedAt = java.time.LocalDateTime.now()
                         )
-                        doSave(nextOccurrence, null)
+                        val savedNextOccurrence = doSave(nextOccurrence, null)
+                        updatedTodos = upsertTodo(updatedTodos, savedNextOccurrence)
                         // Schedule the reminder for the next iteration's due date.
-                        notificationScheduler?.schedule(nextOccurrence)
+                        notificationScheduler?.schedule(savedNextOccurrence)
                     }
                 }
-                doLoad()
+                _uiState.update {
+                    it.copy(todos = updatedTodos, isLoading = false, errorMessage = null)
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             } finally {
@@ -243,10 +323,10 @@ class TodoViewModel(
     fun trashTodo(todo: TodoItem) {
         viewModelScope.launch {
             try {
-                repository.trashTodo(todo)
+                val trashed = repository.trashTodo(todo)
                 notificationScheduler?.cancel(todo.id)
-                loadTodos()
-                loadTrash()
+                _uiState.update { it.copy(todos = it.todos.filterNot { item -> item.id == todo.id }) }
+                _trashedTodos.update { current -> listOf(trashed) + current.filterNot { it.id == todo.id } }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             }
@@ -259,8 +339,8 @@ class TodoViewModel(
             try {
                 repository.deleteTodo(todo)
                 notificationScheduler?.cancel(todo.id)
-                loadTodos()
-                loadTrash()
+                _uiState.update { it.copy(todos = it.todos.filterNot { item -> item.id == todo.id }) }
+                _trashedTodos.update { current -> current.filterNot { it.id == todo.id } }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             }
@@ -276,8 +356,8 @@ class TodoViewModel(
                 if (!restored.isCompleted && restored.dueDate != null) {
                     notificationScheduler?.schedule(restored)
                 }
-                loadTodos()
-                loadTrash()
+                _uiState.update { it.copy(todos = upsertTodo(it.todos, restored)) }
+                _trashedTodos.update { current -> current.filterNot { it.id == todo.id } }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             }
@@ -485,7 +565,13 @@ class TodoViewModel(
                 if (updated.isNotEmpty()) {
                     repository.bulkSave(updated)
                     updated.forEach { notificationScheduler?.cancel(it.id) }
-                    doLoad()
+                    _uiState.update { state ->
+                        state.copy(
+                            todos = updated.fold(state.todos, ::upsertTodo),
+                            isLoading = false,
+                            errorMessage = null
+                        )
+                    }
                 }
                 clearSelection()
             } catch (e: Exception) {
@@ -497,18 +583,47 @@ class TodoViewModel(
     }
 
     /** Moves all selected todos to trash, then syncs once. Clears selection when done. */
-    fun bulkTrash() {
+    fun bulkTrash(onComplete: (Int) -> Unit = {}) {
         viewModelScope.launch {
+            lastTrashedTodos = emptyList()
             try {
                 val ids = _selectedIds.value
                 val targets = _uiState.value.todos.filter { it.id in ids }
                 if (targets.isNotEmpty()) {
-                    repository.bulkTrash(targets)
+                    lastTrashedTodos = repository.bulkTrash(targets)
                     targets.forEach { notificationScheduler?.cancel(it.id) }
-                    doLoad()
-                    loadTrash()
+                    _uiState.update { state ->
+                        state.copy(todos = state.todos.filterNot { it.id in ids })
+                    }
+                    _trashedTodos.update { current ->
+                        lastTrashedTodos + current.filterNot { old -> old.id in ids }
+                    }
                 }
                 clearSelection()
+                onComplete(lastTrashedTodos.size)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    fun undoLastTrash() {
+        val items = lastTrashedTodos
+        if (items.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val restored = repository.bulkRestore(items)
+                lastTrashedTodos = emptyList()
+                restored.forEach { item ->
+                    if (!item.isCompleted && item.dueDate != null) {
+                        notificationScheduler?.schedule(item)
+                    }
+                }
+                _uiState.update { state ->
+                    state.copy(todos = restored.fold(state.todos, ::upsertTodo))
+                }
+                val restoredIds = restored.mapTo(mutableSetOf()) { it.id }
+                _trashedTodos.update { current -> current.filterNot { it.id in restoredIds } }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
             }
@@ -526,7 +641,9 @@ class TodoViewModel(
                     .map { it.copy(priority = priority) }
                 if (updated.isNotEmpty()) {
                     repository.bulkSave(updated)
-                    doLoad()
+                    _uiState.update { state ->
+                        state.copy(todos = updated.fold(state.todos, ::upsertTodo))
+                    }
                 }
                 clearSelection()
             } catch (e: Exception) {
@@ -552,6 +669,7 @@ class TodoViewModel(
     companion object {
         /** Recommended daily LOE capacity, roughly an 8-hour work day. */
         const val DEFAULT_DAILY_CAPACITY = 21
+        private const val AUTOMATIC_SYNC_MIN_INTERVAL_MILLIS = 60_000L
 
         /** Nulls sort last (no due date → end of list). */
         private val DUE_ASC: Comparator<TodoItem> = Comparator { a, b ->

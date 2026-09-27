@@ -1,5 +1,6 @@
 package com.tmstoner.silvermeme.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,12 +41,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
@@ -59,7 +62,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -81,21 +94,24 @@ import kotlinx.coroutines.launch
  * Right pane (remaining space): detail / edit form for the selected task, or an
  *             empty-state prompt when nothing is selected.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun TabletTodoLayout(
     viewModel: TodoViewModel,
-    onOpenNavigationDrawer: () -> Unit
+    onOpenNavigationDrawer: () -> Unit,
+    onNavigateToDashboard: () -> Unit = {}
 ) {
     val uiState           by viewModel.uiState.collectAsStateWithLifecycle()
     val filterState       by viewModel.filterState.collectAsStateWithLifecycle()
     val syncState         by viewModel.syncState.collectAsStateWithLifecycle()
+    val pendingSync       by viewModel.pendingSync.collectAsStateWithLifecycle()
     val groups            by viewModel.visibleGroups.collectAsStateWithLifecycle()
     val availableProjects by viewModel.availableProjects.collectAsStateWithLifecycle()
     val selectedIds       by viewModel.selectedIds.collectAsStateWithLifecycle()
     val selectedTodoId    by viewModel.selectedTodoId.collectAsStateWithLifecycle()
 
     val isSelecting = selectedIds.isNotEmpty()
+    val context = LocalContext.current
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
@@ -107,6 +123,8 @@ fun TabletTodoLayout(
     var showConflictDialog by remember { mutableStateOf(false) }
     var conflictFiles    by remember { mutableStateOf<List<String>>(emptyList()) }
     var showPriorityMenu by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    var focusSearchRequested by remember { mutableStateOf(false) }
 
     // The task currently shown in the right pane.
     // null  = "new task" mode (triggered by FAB)
@@ -115,13 +133,20 @@ fun TabletTodoLayout(
     var newTaskRequested by remember { mutableStateOf(false) }
     var editingSelectedTodo by remember { mutableStateOf(false) }
 
+    LaunchedEffect(showSearchBar, focusSearchRequested) {
+        if (showSearchBar && focusSearchRequested) {
+            searchFocusRequester.requestFocus()
+            focusSearchRequested = false
+        }
+    }
+
     val selectedTodo: TodoItem? = selectedTodoId?.let { id ->
         uiState.todos.firstOrNull { it.id == id }
     }
 
     // Transparent remote sync on first composition
     LaunchedEffect(Unit) {
-        viewModel.syncFromRemote()
+        viewModel.syncFromRemoteIfStale()
     }
 
     // Surface sync state as Snackbar messages
@@ -129,18 +154,11 @@ fun TabletTodoLayout(
         when (syncState) {
             is SyncState.Success -> {
                 scope.launch {
-                    snackbarHostState.showSnackbar((syncState as SyncState.Success).message)
+                    snackbarHostState.showSnackbar(context.getString(R.string.sync_success))
                 }
                 viewModel.clearSyncState()
             }
-            is SyncState.Failure -> {
-                scope.launch {
-                    snackbarHostState.showSnackbar(
-                        "Sync error: ${(syncState as SyncState.Failure).message}"
-                    )
-                }
-                viewModel.clearSyncState()
-            }
+            is SyncState.Failure -> Unit // SyncFailureFeedback provides a retry action.
             is SyncState.Conflict -> {
                 conflictFiles = (syncState as SyncState.Conflict).files
                 showConflictDialog = true
@@ -150,212 +168,172 @@ fun TabletTodoLayout(
     }
 
     Scaffold(
+        modifier = Modifier.onPreviewKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) {
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
+                    !newTaskRequested && !editingSelectedTodo
+                ) {
+                    when {
+                        selectedIds.isNotEmpty() -> viewModel.clearSelection()
+                        selectedTodoId != null -> viewModel.selectTodoForPane(null)
+                        else -> onNavigateToDashboard()
+                    }
+                    true
+                } else false
+            } else {
+                when (event.key) {
+                    Key.N -> {
+                        if (newTaskRequested || editingSelectedTodo) {
+                            false
+                        } else {
+                            viewModel.selectTodoForPane(null)
+                            newTaskRequested = true
+                            true
+                        }
+                    }
+                    Key.F -> {
+                        if (isSelecting) viewModel.clearSelection()
+                        showSearchBar = true
+                        focusSearchRequested = true
+                        true
+                    }
+                    Key.R -> {
+                        viewModel.syncFromRemote()
+                        true
+                    }
+                    Key.One -> {
+                        if (newTaskRequested || editingSelectedTodo) {
+                            false
+                        } else {
+                            onNavigateToDashboard()
+                            true
+                        }
+                    }
+                    else -> false
+                }
+            }
+        },
         topBar = {
             Column {
-                if (isSelecting) {
-                    TopAppBar(
-                        title = { Text("${selectedIds.size} selected") },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor    = MaterialTheme.colorScheme.secondaryContainer,
-                            titleContentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        navigationIcon = {
-                            IconButton(onClick = { viewModel.clearSelection() }) {
-                                Icon(Icons.Filled.Close, contentDescription = "Exit selection")
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = { viewModel.selectAll() }) {
-                                Icon(Icons.Filled.SelectAll, contentDescription = "Select all")
-                            }
-                            IconButton(onClick = {
-                                viewModel.bulkComplete()
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Marked ${selectedIds.size} as complete")
-                                }
-                            }) {
-                                Icon(Icons.Filled.CheckCircle, contentDescription = "Mark complete")
-                            }
-                            Box {
-                                IconButton(onClick = { showPriorityMenu = true }) {
-                                    Icon(Icons.Filled.SwapVert, contentDescription = "Set priority")
-                                }
-                                DropdownMenu(
-                                    expanded         = showPriorityMenu,
-                                    onDismissRequest = { showPriorityMenu = false }
-                                ) {
-                                    Text(
-                                        "Set priority",
-                                        style    = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                                    )
-                                    Priority.entries.forEach { p ->
-                                        DropdownMenuItem(
-                                            text    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) },
-                                            onClick = {
-                                                showPriorityMenu = false
-                                                viewModel.bulkSetPriority(p)
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                            IconButton(onClick = {
-                                val count = selectedIds.size
-                                viewModel.bulkTrash()
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("$count items moved to trash")
-                                }
-                            }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Move to trash")
-                            }
+                TodoListTopBar(
+                    selecting = isSelecting,
+                    selectedCount = selectedIds.size,
+                    canSelect = groups.isNotEmpty(),
+                    filterActive = filterState.priority != null ||
+                        filterState.showCompleted || filterState.showOverdue,
+                    syncing = syncState is SyncState.Syncing,
+                    onNavigate = onOpenNavigationDrawer,
+                    onClearSelection = viewModel::clearSelection,
+                    onSelectAll = viewModel::selectAll,
+                    onEnterSelection = {
+                        groups.firstOrNull()?.todos?.firstOrNull()?.let {
+                            viewModel.toggleSelection(it.id)
                         }
-                    )
-                } else {
-                    TopAppBar(
-                        title  = { Text(stringResource(R.string.app_name)) },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor    = MaterialTheme.colorScheme.primaryContainer,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        navigationIcon = {
-                            IconButton(onClick = onOpenNavigationDrawer) {
-                                Icon(
-                                    imageVector = Icons.Filled.Menu,
-                                    contentDescription = stringResource(R.string.cd_open_navigation)
+                    },
+                    onComplete = {
+                        val count = selectedIds.size
+                        viewModel.bulkComplete()
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                context.resources.getQuantityString(
+                                    R.plurals.selection_complete_count,
+                                    count,
+                                    count
                                 )
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = {
-                                showSearchBar = !showSearchBar
-                                if (!showSearchBar) {
-                                    searchQuery = ""
-                                    viewModel.onSearchInput("")
-                                }
-                            }) {
-                                Icon(Icons.Filled.Search, contentDescription = "Search")
-                            }
-                            IconButton(onClick = { showFilterPanel = !showFilterPanel }) {
-                                Icon(
-                                    if (filterState.priority != null ||
-                                        filterState.showCompleted ||
-                                        filterState.showOverdue
-                                    ) Icons.Outlined.FilterAlt else Icons.Filled.FilterList,
-                                    contentDescription = "Filter"
+                            )
+                        }
+                    },
+                    onSetPriority = viewModel::bulkSetPriority,
+                    onTrash = {
+                        viewModel.bulkTrash { count ->
+                            scope.launch {
+                                val result = snackbarHostState.showSnackbar(
+                                    message = context.resources.getQuantityString(
+                                        R.plurals.bulk_trash_count,
+                                        count,
+                                        count
+                                    ),
+                                    actionLabel = context.getString(R.string.action_undo)
                                 )
-                            }
-                            IconButton(
-                                onClick = { viewModel.syncFromRemote() },
-                                enabled = syncState !is SyncState.Syncing
-                            ) {
-                                if (syncState is SyncState.Syncing) {
-                                    CircularProgressIndicator(
-                                        modifier    = Modifier.padding(8.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Icon(Icons.Filled.Refresh, contentDescription = "Sync from remote")
-                                }
-                            }
-                            Box {
-                                IconButton(onClick = { showSortMenu = true }) {
-                                    Icon(Icons.Filled.MoreVert, contentDescription = "More options")
-                                }
-                                DropdownMenu(
-                                    expanded         = showSortMenu,
-                                    onDismissRequest = { showSortMenu = false }
-                                ) {
-                                    Text(
-                                        "Sort by",
-                                        style    = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                                    )
-                                    SortOrder.entries.forEach { order ->
-                                        DropdownMenuItem(
-                                            text    = { Text(order.label) },
-                                            onClick = {
-                                                viewModel.setSortOrder(order)
-                                                showSortMenu = false
-                                            }
-                                        )
-                                    }
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    viewModel.undoLastTrash()
                                 }
                             }
                         }
-                    )
+                    },
+                    onSearch = {
+                        showSearchBar = !showSearchBar
+                        if (!showSearchBar) {
+                            searchQuery = ""
+                            viewModel.onSearchInput("")
+                        }
+                    },
+                    onFilter = { showFilterPanel = !showFilterPanel },
+                    onSync = viewModel::syncFromRemote,
+                    onSort = viewModel::setSortOrder
+                )
+
+                if (syncState is SyncState.Conflict && !showConflictDialog) {
+                    TextButton(onClick = { showConflictDialog = true }) {
+                        Text(
+                            pluralStringResource(
+                                R.plurals.sync_conflict_count,
+                                conflictFiles.size,
+                                conflictFiles.size
+                            )
+                        )
+                    }
                 }
+                PendingSyncBanner(
+                    pending = pendingSync,
+                    onRetry = viewModel::retryPendingSync
+                )
+                Text(
+                    text = stringResource(R.string.keyboard_shortcuts_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                )
 
                 // Search bar (conditional)
                 if (showSearchBar && !isSelecting) {
-                    SearchBar(
-                        query          = searchQuery,
-                        onQueryChange  = { q -> searchQuery = q; viewModel.onSearchInput(q) },
-                        onSearch       = { viewModel.onSearchInput(it) },
-                        active         = false,
-                        onActiveChange = {},
-                        placeholder    = { Text("Search todos...") },
-                        modifier       = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {}
+                    TodoSearchField(
+                        query = searchQuery,
+                        onQueryChange = { query ->
+                            searchQuery = query
+                            viewModel.onSearchInput(query)
+                        },
+                        onClear = {
+                            searchQuery = ""
+                            viewModel.onSearchInput("")
+                        },
+                        modifier = Modifier
+                            .focusRequester(searchFocusRequester)
+                    )
                 }
+
+                SyncFailureFeedback(
+                    syncState = syncState,
+                    snackbarHostState = snackbarHostState,
+                    onRetry = viewModel::retryFailedSync,
+                    onDismiss = viewModel::clearSyncState
+                )
 
                 // Compact, horizontally scrolling filters keep the task list usable on landscape tablets.
                 if (showFilterPanel) {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item {
-                            FilterChip(
-                                selected = filterState.project == null,
-                                onClick = { viewModel.setFilterProject(null) },
-                                label = { Text("All projects") }
+                    TodoFilterControls(
+                        state = filterState,
+                        projects = availableProjects,
+                        compact = false,
+                        onProject = viewModel::setFilterProject,
+                        onCompleted = { viewModel.setFilterCompleted(!filterState.showCompleted) },
+                        onOverdue = { viewModel.setFilterOverdue(!filterState.showOverdue) },
+                        onPriority = { priority ->
+                            viewModel.setFilterPriority(
+                                if (filterState.priority == priority) null else priority
                             )
-                        }
-                        items(availableProjects, key = { it }) { project ->
-                            FilterChip(
-                                selected = filterState.project == project,
-                                onClick = { viewModel.setFilterProject(project) },
-                                label = { Text(project) }
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = filterState.showCompleted,
-                                onClick  = { viewModel.setFilterCompleted(!filterState.showCompleted) },
-                                label    = { Text("Show done") },
-                                leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) }
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = filterState.showOverdue,
-                                onClick  = { viewModel.setFilterOverdue(!filterState.showOverdue) },
-                                label    = { Text("Overdue") }
-                            )
-                        }
-                        items(Priority.entries.toList(), key = { it.name }) { priority ->
-                            FilterChip(
-                                selected = filterState.priority == priority,
-                                onClick  = {
-                                    viewModel.setFilterPriority(
-                                        if (filterState.priority == priority) null else priority
-                                    )
-                                },
-                                label = { Text(priority.label.replaceFirstChar { it.uppercaseChar() }) }
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = false,
-                                onClick = { viewModel.resetFilters() },
-                                label = { Text("Reset") },
-                                leadingIcon = { Icon(Icons.Filled.RestartAlt, null) }
-                            )
-                        }
-                    }
+                        },
+                        onReset = viewModel::resetFilters
+                    )
                 }
             }
         },
@@ -366,7 +344,7 @@ fun TabletTodoLayout(
                     newTaskRequested = true
                 },
                 modifier = Modifier.semantics {
-                    contentDescription = "Add new todo"
+                    contentDescription = context.getString(R.string.action_add_task)
                 }
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null)
@@ -392,82 +370,47 @@ fun TabletTodoLayout(
 
                     // ── Task list ──────────────────────────────────────────────
                     val isRefreshing = syncState is SyncState.Syncing
-                    PullToRefreshBox(
-                        isRefreshing = isRefreshing,
-                        onRefresh    = { viewModel.syncFromRemote() },
-                        modifier     = Modifier.fillMaxSize()
-                    ) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            if (uiState.isLoading) {
-                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            }
-
-                            if (!uiState.isLoading && groups.isEmpty()) {
-                                Box(
-                                    Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(
-                                            "No todos found",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.height(8.dp))
-                                        Text(
-                                            "Tap + to create one, or pull to sync",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                    Box(Modifier.fillMaxSize()) {
+                        PullToRefreshBox(
+                            isRefreshing = isRefreshing,
+                            onRefresh    = { viewModel.syncFromRemote() },
+                            modifier     = Modifier.fillMaxSize()
+                        ) {
+                            TodoTaskListContent(
+                                groups = groups,
+                                isLoading = uiState.isLoading,
+                                hasAnyTodos = uiState.todos.isNotEmpty(),
+                                selectionMode = isSelecting,
+                                selectedIds = selectedIds,
+                                onToggleComplete = viewModel::toggleComplete,
+                                onTodoClick = { todo ->
+                                    if (isSelecting) {
+                                        viewModel.toggleSelection(todo.id)
+                                    } else {
+                                        newTaskRequested = false
+                                        editingSelectedTodo = false
+                                        viewModel.selectTodoForPane(todo.id)
                                     }
-                                }
-                            } else {
-                                LazyColumn(
-                                    contentPadding      = PaddingValues(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    groups.forEach { group ->
-                                        item(
-                                            key         = "header_${group.label}",
-                                            contentType = "group_header"
-                                        ) {
-                                            Text(
-                                                text     = "${group.label} (${group.todos.size})",
-                                                style    = MaterialTheme.typography.titleSmall,
-                                                color    = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(vertical = 4.dp)
-                                            )
-                                        }
-                                        items(
-                                            items       = group.todos,
-                                            key         = { it.id },
-                                            contentType = { "todo_card" }
-                                        ) { todo ->
-                                            TodoItemCard(
-                                                todo              = todo,
-                                                onToggleComplete  = {
-                                                    if (!isSelecting) viewModel.toggleComplete(it)
-                                                },
-                                                onClick           = { t ->
-                                                    if (isSelecting) {
-                                                        viewModel.toggleSelection(t.id)
-                                                    } else {
-                                                        newTaskRequested = false
-                                                        editingSelectedTodo = false
-                                                        viewModel.selectTodoForPane(t.id)
-                                                    }
-                                                },
-                                                onLongClick       = { t ->
-                                                    viewModel.toggleSelection(t.id)
-                                                },
-                                                isSelected        = todo.id in selectedIds,
-                                                onSelectionToggle = if (isSelecting) {
-                                                    { viewModel.toggleSelection(todo.id) }
-                                                } else null,
-                                                modifier          = Modifier.animateItem()
-                                            )
-                                        }
-                                    }
+                                },
+                                onTodoLongClick = { todo -> viewModel.toggleSelection(todo.id) },
+                                onSelectionToggle = viewModel::toggleSelection,
+                                onResetFilters = viewModel::resetFilters,
+                                contentPadding = PaddingValues(8.dp)
+                            )
+                        }
+                        uiState.errorMessage?.let { message ->
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    message.ifBlank { context.getString(R.string.error_task_load) },
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                TextButton(onClick = viewModel::loadTodos) {
+                                    Text(stringResource(R.string.action_reload_tasks))
                                 }
                             }
                         }
@@ -535,12 +478,12 @@ fun TabletTodoLayout(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    "Select a task to view details",
+                                    stringResource(R.string.empty_select_task),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    "Or tap + to create a new one",
+                                    stringResource(R.string.empty_create_task),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -558,18 +501,17 @@ fun TabletTodoLayout(
             conflictFiles = conflictFiles,
             onKeepLocal   = {
                 showConflictDialog = false
-                viewModel.clearSyncState()
-                scope.launch { snackbarHostState.showSnackbar("Kept local version") }
+                viewModel.resolveConflicts(conflictFiles, keepLocal = true)
             },
             onKeepRemote  = {
                 showConflictDialog = false
-                viewModel.clearSyncState()
-                viewModel.syncFromRemote()
-                scope.launch { snackbarHostState.showSnackbar("Synced remote version") }
+                viewModel.resolveConflicts(conflictFiles, keepLocal = false)
             },
             onDismiss     = {
                 showConflictDialog = false
-                scope.launch { snackbarHostState.showSnackbar("Conflict unresolved — sync pending") }
+                scope.launch {
+                    snackbarHostState.showSnackbar(context.getString(R.string.conflict_unresolved))
+                }
             }
         )
     }

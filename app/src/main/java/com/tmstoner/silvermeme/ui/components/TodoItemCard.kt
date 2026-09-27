@@ -25,17 +25,23 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.ui.theme.StatusDone
 import com.tmstoner.silvermeme.ui.theme.StatusOverdue
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
-
-private val DISPLAY_DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM d, yyyy")
+import java.util.Locale
 
 /**
  * A card that summarises a single [TodoItem] with:
@@ -59,11 +65,24 @@ fun TodoItemCard(
     val today   = LocalDate.now()
     val overdue = !todo.isCompleted && todo.dueDate != null && todo.dueDate.isBefore(today)
     val overdueDays = if (overdue) ChronoUnit.DAYS.between(todo.dueDate, today) else 0L
+    val cardActionLabel = stringResource(
+        if (onSelectionToggle == null) R.string.cd_open_task else R.string.cd_toggle_task_selection
+    )
+    val cardLongActionLabel = stringResource(R.string.cd_select_task)
+    val statusDescription = when {
+        isSelected -> stringResource(R.string.state_task_selected)
+        todo.isCompleted -> stringResource(R.string.task_status_completed)
+        overdue -> stringResource(R.string.state_task_overdue)
+        else -> stringResource(R.string.task_status_open)
+    }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .combinedClickable(
+                onClickLabel = cardActionLabel,
+                onLongClickLabel = cardLongActionLabel,
+                role = Role.Button,
                 onClick     = { 
                     if (onSelectionToggle != null) {
                         onSelectionToggle()
@@ -72,7 +91,10 @@ fun TodoItemCard(
                     }
                 },
                 onLongClick = { onLongClick(todo) }
-            ),
+            )
+            .semantics(mergeDescendants = true) {
+                stateDescription = statusDescription
+            },
         colors = CardDefaults.cardColors(
             containerColor = when {
                 isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
@@ -89,13 +111,14 @@ fun TodoItemCard(
         ) {
             // Completion toggle
             IconButton(
-                onClick  = { onToggleComplete(todo) },
-                modifier = Modifier.size(40.dp)
+                onClick = { onToggleComplete(todo) }
             ) {
                 Icon(
                     imageVector        = if (todo.isCompleted) Icons.Filled.CheckCircle
                                         else Icons.Filled.RadioButtonUnchecked,
-                    contentDescription = if (todo.isCompleted) "Mark incomplete" else "Mark complete",
+                    contentDescription = stringResource(
+                        if (todo.isCompleted) R.string.cd_mark_task_incomplete else R.string.cd_mark_task_complete
+                    ),
                     tint               = if (todo.isCompleted) MaterialTheme.colorScheme.primary
                                         else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -120,7 +143,7 @@ fun TodoItemCard(
                         Spacer(Modifier.width(4.dp))
                         Icon(
                             imageVector        = Icons.Filled.Repeat,
-                            contentDescription = "Repeats ${todo.recurrence}",
+                            contentDescription = stringResource(R.string.label_schedule),
                             tint               = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier           = Modifier.size(12.dp)
                         )
@@ -134,18 +157,15 @@ fun TodoItemCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector        = Icons.Outlined.CalendarToday,
-                            contentDescription = if (overdue) "Overdue" else "Due date",
+                            contentDescription = stringResource(
+                                if (overdue) R.string.overdue_description else R.string.due_date_description
+                            ),
                             tint               = if (overdue) StatusOverdue else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier           = Modifier.size(14.dp)
                         )
                         Spacer(Modifier.width(3.dp))
                         Text(
-                            text  = if (overdue) {
-                                val overdueLabel = if (overdueDays == 1L) "1 day overdue" else "${overdueDays}d overdue"
-                                "$overdueLabel · ${due.format(DISPLAY_DATE_FORMATTER)}"
-                            } else {
-                                "Due ${due.format(DISPLAY_DATE_FORMATTER)}"
-                            },
+                            text = dueStatusLabel(due, overdue, overdueDays),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (overdue) StatusOverdue else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -157,7 +177,7 @@ fun TodoItemCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector        = Icons.Filled.LocationOn,
-                            contentDescription = "Location",
+                            contentDescription = stringResource(R.string.label_location),
                             tint               = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier           = Modifier.size(14.dp)
                         )
@@ -178,5 +198,26 @@ fun TodoItemCard(
             Spacer(Modifier.width(6.dp))
             PriorityChip(priority = todo.priority)
         }
+    }
+}
+
+@Composable
+private fun dueStatusLabel(
+    due: LocalDate,
+    overdue: Boolean,
+    overdueDays: Long
+): String {
+    val date = due.format(
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault())
+    )
+    return if (overdue) {
+        val days = pluralStringResource(
+            R.plurals.overdue_days,
+            overdueDays.toInt(),
+            overdueDays.toInt()
+        )
+        stringResource(R.string.overdue_date_format, days, date)
+    } else {
+        stringResource(R.string.due_date_format, date)
     }
 }

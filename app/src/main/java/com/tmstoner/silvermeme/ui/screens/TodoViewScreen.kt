@@ -31,8 +31,8 @@ import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.ui.theme.SilvermemeTheme
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-
-private val taskDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
+import java.time.format.FormatStyle
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,16 +95,32 @@ fun TodoViewScreen(
             item {
                 TaskMetadataCard(
                     label = stringResource(R.string.label_priority),
-                    value = todo.priority.label.replaceFirstChar { it.uppercaseChar() }
+                    value = todo.priority.localizedLabel()
                 )
             }
             todo.dueDate?.let { dueDate ->
                 item {
                     TaskMetadataCard(
                         label = stringResource(R.string.label_due_date),
-                        value = dueDate.format(taskDateFormatter)
+                        value = dueDate.format(
+                            DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+                                .withLocale(Locale.getDefault())
+                        )
                     )
                 }
+            }
+            item {
+                TaskMetadataCard(
+                    label = stringResource(R.string.label_reminder),
+                    value = when {
+                        !todo.reminderEnabled -> stringResource(R.string.reminder_disabled)
+                        todo.reminderTime == null -> stringResource(R.string.reminder_due_midnight)
+                        else -> todo.reminderTime.format(
+                            DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+                                .withLocale(Locale.getDefault())
+                        )
+                    }
+                )
             }
             todo.project.takeIf { it.isNotBlank() }?.let { project ->
                 item {
@@ -126,7 +142,7 @@ fun TodoViewScreen(
                 item {
                     TaskMetadataCard(
                         label = stringResource(R.string.label_schedule),
-                        value = RecurrenceRule.parse(recurrence).summary()
+                        value = RecurrenceRule.parse(recurrence).localizedSummary()
                     )
                 }
             }

@@ -11,6 +11,7 @@ import androidx.work.workDataOf
 import com.tmstoner.silvermeme.data.model.TodoItem
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalTime
 import java.time.ZoneId
 
 class NotificationScheduler(context: Context) {
@@ -20,7 +21,8 @@ class NotificationScheduler(context: Context) {
     init { ensureChannel() }
 
     /**
-     * Schedules a WorkManager reminder for [todo] at start-of-day on its due date.
+     * Schedules a WorkManager reminder for [todo] at its configured local time.
+     * A null reminder time means midnight on the due date.
      * No-ops if: due date is null, due date is in the past, or POST_NOTIFICATIONS
      * permission is not granted (Android 13+).
      *
@@ -30,14 +32,18 @@ class NotificationScheduler(context: Context) {
      * whether to show the permission rationale dialog.
      */
     fun schedule(todo: TodoItem) {
-        val dueDate = todo.dueDate ?: return
-        val triggerTime = dueDate.atStartOfDay(ZoneId.systemDefault()).toInstant()
+        workManager.cancelAllWorkByTag(todo.id)
+        if (!todo.reminderEnabled || todo.isCompleted || todo.dueDate == null) {
+            return
+        }
+        val reminderTime = todo.reminderTime ?: LocalTime.MIDNIGHT
+        val triggerTime = todo.dueDate.atTime(reminderTime)
+            .atZone(ZoneId.systemDefault()).toInstant()
         val now = Instant.now()
         if (triggerTime.isBefore(now)) return
         // Only schedule if we have permission; the UI will request it separately.
         if (!hasNotificationPermission(appContext)) return
 
-        workManager.cancelAllWorkByTag(todo.id)
         val request = OneTimeWorkRequestBuilder<ReminderWorker>()
             .setInitialDelay(Duration.between(now, triggerTime))
             .setInputData(workDataOf("title" to todo.title, "todo_id" to todo.id))

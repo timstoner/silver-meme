@@ -39,7 +39,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tmstoner.silvermeme.R
@@ -61,13 +63,22 @@ fun TrashScreen(
     val trashedTodos     by viewModel.trashedTodos.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var confirmEmptyTrash by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Trash (${trashedTodos.size})") },
+                title = {
+                    Text(
+                        pluralStringResource(
+                            R.plurals.trash_title_count,
+                            trashedTodos.size,
+                            trashedTodos.size
+                        )
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor    = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -83,7 +94,10 @@ fun TrashScreen(
                 actions = {
                     if (trashedTodos.isNotEmpty()) {
                         IconButton(onClick = { confirmEmptyTrash = true }) {
-                            Icon(Icons.Filled.DeleteForever, contentDescription = "Empty trash")
+                            Icon(
+                                Icons.Filled.DeleteForever,
+                                contentDescription = stringResource(R.string.trash_empty_action)
+                            )
                         }
                     }
                 }
@@ -109,13 +123,13 @@ fun TrashScreen(
                     )
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        "Trash is empty",
+                        stringResource(R.string.trash_empty_title),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Items are auto-purged after 30 days",
+                        stringResource(R.string.trash_auto_purge),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -127,7 +141,7 @@ fun TrashScreen(
                 ) {
                     item {
                         Text(
-                            "Swipe right to restore · Swipe left to delete forever",
+                            stringResource(R.string.trash_swipe_hint),
                             style    = MaterialTheme.typography.labelSmall,
                             color    = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 4.dp)
@@ -143,13 +157,17 @@ fun TrashScreen(
                             onRestore = {
                                 viewModel.restoreTodo(todo)
                                 scope.launch {
-                                    snackbarHostState.showSnackbar("\"${todo.title}\" restored")
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.trash_restore_message, todo.title)
+                                    )
                                 }
                             },
                             onDelete  = {
                                 viewModel.deleteTodo(todo)
                                 scope.launch {
-                                    snackbarHostState.showSnackbar("\"${todo.title}\" permanently deleted")
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.trash_delete_message, todo.title)
+                                    )
                                 }
                             }
                         )
@@ -163,18 +181,30 @@ fun TrashScreen(
     if (confirmEmptyTrash) {
         AlertDialog(
             onDismissRequest = { confirmEmptyTrash = false },
-            title = { Text("Empty trash?") },
-            text  = { Text("All ${trashedTodos.size} item(s) will be permanently deleted. This cannot be undone.") },
+            title = { Text(stringResource(R.string.trash_empty_confirm_title)) },
+            text  = {
+                Text(
+                    pluralStringResource(
+                        R.plurals.trash_empty_confirm_count,
+                        trashedTodos.size,
+                        trashedTodos.size
+                    )
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmEmptyTrash = false
                     val items = trashedTodos.toList()
                     items.forEach { viewModel.deleteTodo(it) }
-                    scope.launch { snackbarHostState.showSnackbar("Trash emptied") }
-                }) { Text("Delete all", color = MaterialTheme.colorScheme.error) }
+                    scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.trash_empty_done)) }
+                }) {
+                    Text(stringResource(R.string.trash_delete_all), color = MaterialTheme.colorScheme.error)
+                }
             },
             dismissButton = {
-                TextButton(onClick = { confirmEmptyTrash = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmEmptyTrash = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             }
         )
     }
@@ -234,13 +264,13 @@ private fun TrashItemRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (direction == SwipeToDismissBoxValue.StartToEnd) {
-                        Icon(icon, contentDescription = "Restore", tint = MaterialTheme.colorScheme.primary)
-                        Text("Restore", color = MaterialTheme.colorScheme.primary,
+                        Icon(icon, contentDescription = stringResource(R.string.trash_restore_action), tint = MaterialTheme.colorScheme.primary)
+                        Text(stringResource(R.string.trash_restore_action), color = MaterialTheme.colorScheme.primary,
                             style = MaterialTheme.typography.labelMedium)
                     } else {
-                        Text("Delete", color = MaterialTheme.colorScheme.error,
+                        Text(stringResource(R.string.trash_delete_action), color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.labelMedium)
-                        Icon(icon, contentDescription = "Delete forever", tint = MaterialTheme.colorScheme.error)
+                        Icon(icon, contentDescription = stringResource(R.string.trash_delete_forever), tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }

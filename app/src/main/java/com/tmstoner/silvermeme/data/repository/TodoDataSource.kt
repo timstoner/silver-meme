@@ -2,9 +2,17 @@ package com.tmstoner.silvermeme.data.repository
 
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import java.time.LocalDate
 
 interface TodoDataSource {
+    /** Emits automatic-sync errors/conflicts and a success event after recovery. */
+    val automaticSyncEvents: SharedFlow<GitRepository.GitResult>
+    /** Remains true across process death/offline retries until a remote sync succeeds. */
+    val pendingSync: Flow<Boolean> get() = emptyFlow()
+
     suspend fun getTodos(): List<TodoItem>
     /**
      * Returns incomplete tasks due today or earlier, split into overdue and today buckets.
@@ -23,7 +31,12 @@ interface TodoDataSource {
     /** Saves multiple todos in a single batch and syncs once at the end. */
     suspend fun bulkSave(todos: List<TodoItem>)
     /** Moves multiple todos to trash in a single batch and syncs once at the end. */
-    suspend fun bulkTrash(todos: List<TodoItem>)
+    suspend fun bulkTrash(todos: List<TodoItem>): List<TodoItem>
+    /** Restores multiple trashed todos in a single batch and syncs once at the end. */
+    suspend fun bulkRestore(todos: List<TodoItem>): List<TodoItem>
     suspend fun pull(): GitRepository.GitResult
     suspend fun push(message: String = "Update todos"): GitRepository.GitResult
+    suspend fun resolveConflicts(files: List<String>, keepLocal: Boolean): GitRepository.GitResult
+    /** Performs a pending pull-then-push sync; safe for a network-constrained worker. */
+    suspend fun retryPendingSync(): GitRepository.GitResult = GitRepository.GitResult.Success
 }

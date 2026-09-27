@@ -12,6 +12,8 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
+import java.nio.file.Files
 
 /**
  * Unit tests for [MarkdownFileManager].
@@ -170,6 +172,62 @@ class MarkdownFileManagerTest {
         val md   = manager.serializeToMarkdown(todo)
         val parsed = manager.parseMarkdownFile(createTempMd(md, "done-item"))!!
         assertTrue(parsed.isCompleted)
+    }
+
+    @Test
+    fun `round-trip preserves frontmatter scalars with yaml control characters`() {
+        val original = sampleTodo().copy(
+            title = "Plan: #1\n- next",
+            location = "Desk: #2",
+            tags = listOf("#urgent", "work item")
+        )
+
+        val parsed = manager.parseMarkdownFile(
+            createTempMd(manager.serializeToMarkdown(original), "escaped-values")
+        )!!
+
+        assertEquals(original.title, parsed.title)
+        assertEquals(original.location, parsed.location)
+        assertEquals(original.tags, parsed.tags)
+    }
+
+    @Test
+    fun `round-trip quotes colon followed by a space`() {
+        val original = sampleTodo().copy(title = "Plan: review", location = "Desk: west")
+
+        val parsed = manager.parseMarkdownFile(
+            createTempMd(manager.serializeToMarkdown(original), "colon-values")
+        )!!
+
+        assertEquals(original.title, parsed.title)
+        assertEquals(original.location, parsed.location)
+    }
+
+    @Test
+    fun `legacy created date uses file creation timestamp`() {
+        val file = createTempMd("---\ntitle: Legacy\n---\n", "legacy")
+        val expected = Files.readAttributes(file.toPath(), java.nio.file.attribute.BasicFileAttributes::class.java)
+            .creationTime()
+            .toInstant()
+            .atZone(ZoneId.systemDefault())
+            .toLocalDateTime()
+
+        val parsed = manager.parseMarkdownFile(file)!!
+
+        assertEquals(expected, parsed.createdAt)
+    }
+
+    @Test
+    fun `checklist status only reads checkbox marker`() {
+        val file = createTempMd(
+            "---\ntitle: Checklist\n---\n- [ ] This text contains [x but is not checked\n- [x] Completed",
+            "checklist-status"
+        )
+
+        val parsed = manager.parseMarkdownFile(file)!!
+
+        assertEquals(false, parsed.checklist[0].isDone)
+        assertEquals(true, parsed.checklist[1].isDone)
     }
 
     // ── Save / delete ─────────────────────────────────────────────────────────

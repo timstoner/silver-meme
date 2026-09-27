@@ -4,6 +4,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import com.tmstoner.silvermeme.R
 
 @Composable
 fun ConflictResolutionDialog(
@@ -14,22 +16,23 @@ fun ConflictResolutionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Sync Conflict") },
+        title = { Text(stringResource(R.string.conflict_dialog_title)) },
         text = {
             Text(
-                "The following files have conflicts:\n" +
-                conflictFiles.joinToString("\n") { "• $it" } +
-                "\n\nChoose which version to keep."
+                stringResource(
+                    R.string.conflict_files_message,
+                    conflictFiles.joinToString("\n") { "• $it" }
+                )
             )
         },
         confirmButton = {
             TextButton(onClick = onKeepRemote) {
-                Text("Keep Remote")
+                Text(stringResource(R.string.conflict_keep_remote))
             }
         },
         dismissButton = {
             TextButton(onClick = onKeepLocal) {
-                Text("Keep Local")
+                Text(stringResource(R.string.conflict_keep_local))
             }
         }
     )

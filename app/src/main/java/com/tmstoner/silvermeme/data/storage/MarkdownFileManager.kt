@@ -4,8 +4,12 @@ import com.tmstoner.silvermeme.data.model.ChecklistItem
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.attribute.BasicFileAttributes
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
@@ -55,7 +59,7 @@ class MarkdownFileManager(private val vaultDir: File) {
          */
         fun sanitizeFilename(title: String): String =
             title
-                .replace(Regex("[/\\\\:*?\"<>|#]"), "_")
+                .replace(Regex("[/\\\\:*?\"<>|#\\p{Cc}]"), "_")
                 .trim()
                 .trimEnd('.')
                 .take(150)
@@ -271,7 +275,11 @@ class MarkdownFileManager(private val vaultDir: File) {
                 updatedAt = parseDateTime(frontmatter["updated"]) ?: LocalDateTime.now(),
                 checklist = checklist,
                 recurrence = frontmatter["recurrence"]?.lowercase()?.trim() ?: "none",
-                loe = frontmatter["loe"]?.trim()?.toIntOrNull() ?: 0
+                loe = frontmatter["loe"]?.trim()?.toIntOrNull() ?: 0,
+                reminderEnabled = frontmatter["reminderEnabled"]?.trim()?.toBooleanStrictOrNull() ?: true,
+                reminderTime = frontmatter["reminderTime"]?.trim()?.let {
+                    runCatching { LocalTime.parse(it) }.getOrNull()
+                }
             )
         } catch (e: Exception) {
             null
@@ -283,18 +291,20 @@ class MarkdownFileManager(private val vaultDir: File) {
     /** Converts a [TodoItem] to its Obsidian-compatible markdown string representation. */
     fun serializeToMarkdown(todo: TodoItem): String = buildString {
         appendLine(FRONTMATTER_DELIMITER)
-        appendLine("id: ${todo.id}")
-        appendLine("title: ${todo.title}")
+        appendLine("id: ${encodeScalar(todo.id)}")
+        appendLine("title: ${encodeScalar(todo.title)}")
         appendLine("status: ${if (todo.isCompleted) "done" else "open"}")
         appendLine("priority: ${todo.priority.label}")
         todo.dueDate?.let { appendLine("due: ${it.format(DATE_FORMATTER)}") }
-        todo.location?.takeIf { it.isNotBlank() }?.let { appendLine("location: $it") }
+        todo.location?.takeIf { it.isNotBlank() }?.let { appendLine("location: ${encodeScalar(it)}") }
         if (todo.tags.isNotEmpty()) {
             appendLine("tags:")
-            todo.tags.forEach { appendLine("  - $it") }
+            todo.tags.forEach { appendLine("  - ${encodeScalar(it)}") }
         }
-        if (todo.recurrence != "none") appendLine("recurrence: ${todo.recurrence}")
+        if (todo.recurrence != "none") appendLine("recurrence: ${encodeScalar(todo.recurrence)}")
         if (todo.loe != 0) appendLine("loe: ${todo.loe}")
+        appendLine("reminderEnabled: ${todo.reminderEnabled}")
+        todo.reminderTime?.let { appendLine("reminderTime: $it") }
         appendLine("created: ${todo.createdAt.format(DATETIME_FORMATTER)}")
         appendLine("updated: ${todo.updatedAt.format(DATETIME_FORMATTER)}")
         appendLine(FRONTMATTER_DELIMITER)
@@ -346,7 +356,7 @@ class MarkdownFileManager(private val vaultDir: File) {
                 // Block sequence item (indent + dash)
                 line.matches(Regex("\\s+- .*")) || line.matches(Regex("- .*")) -> {
                     if (currentListKey != null) {
-                        val value = line.trimStart().removePrefix("- ").trim()
+                        val value = decodeScalar(line.trimStart().removePrefix("- ").trim())
                         listAccumulator.add(value)
                         result[currentListKey] = listAccumulator.joinToString(",")
                     }
@@ -361,7 +371,7 @@ class MarkdownFileManager(private val vaultDir: File) {
                     }
                     val colonIdx = line.indexOf(':')
                     val key = line.substring(0, colonIdx).trim()
-                    val value = line.substring(colonIdx + 1).trim()
+                    val value = decodeScalar(line.substring(colonIdx + 1).trim())
                     if (value.isEmpty()) {
                         // Possible block sequence follows
                         currentListKey = key
@@ -399,16 +409,101 @@ class MarkdownFileManager(private val vaultDir: File) {
         return value.split(",").map { it.trim() }.filter { it.isNotEmpty() }
     }
 
-    private fun fileCreationTime(file: File): LocalDateTime =
-        try { LocalDateTime.now() } catch (_: Exception) { LocalDateTime.now() }
+    private fun encodeScalar(value: String): String {
+        val requiresQuotes = value.isEmpty() ||
+            value != value.trim() ||
+            value.startsWith("- ") ||
+            value.startsWith("? ") ||
+            value.startsWith(": ") ||
+            value.startsWith("---") ||
+            value.startsWith("\"") ||
+            value.contains(": ") ||
+            value.any { it == '#' || it.code < 0x20 }
+        if (!requiresQuotes) return value
+
+        return buildString(value.length + 2) {
+            append('"')
+            value.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> if (char.code < 0x20) {
+                        append("\\u")
+                        append(char.code.toString(16).padStart(4, '0'))
+                    } else {
+                        append(char)
+                    }
+                }
+            }
+            append('"')
+        }
+    }
+
+    private fun decodeScalar(value: String): String {
+        if (value.length < 2) return value
+        if (value.first() == '\'' && value.last() == '\'') {
+            return value.substring(1, value.lastIndex).replace("''", "'")
+        }
+        if (value.first() != '"' || value.last() != '"') return value
+
+        val source = value.substring(1, value.lastIndex)
+        return buildString(source.length) {
+            var index = 0
+            while (index < source.length) {
+                val char = source[index++]
+                if (char != '\\' || index == source.length) {
+                    append(char)
+                    continue
+                }
+                when (val escaped = source[index++]) {
+                    '\\' -> append('\\')
+                    '"' -> append('"')
+                    'n' -> append('\n')
+                    'r' -> append('\r')
+                    't' -> append('\t')
+                    'u' -> {
+                        val end = (index + 4).coerceAtMost(source.length)
+                        val code = source.substring(index, end).toIntOrNull(16)
+                        if (end - index == 4 && code != null) {
+                            append(code.toChar())
+                            index = end
+                        } else {
+                            append("\\u")
+                        }
+                    }
+                    else -> {
+                        append('\\')
+                        append(escaped)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun fileCreationTime(file: File): LocalDateTime {
+        val attributes = try {
+            Files.readAttributes(file.toPath(), BasicFileAttributes::class.java)
+        } catch (_: Exception) {
+            null
+        }
+        val fileTime = attributes?.creationTime()
+            ?.takeIf { it.toMillis() > 0L }
+            ?: attributes?.lastModifiedTime()
+        val instant = fileTime?.toInstant()
+            ?: java.time.Instant.ofEpochMilli(file.lastModified())
+        return LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+    }
 
     /** Extracts checklist items from markdown body (Track E1). Parses `- [ ]` / `- [x]` syntax. */
     private fun parseChecklistFromBody(body: String): List<ChecklistItem> =
-        Regex("^- \\[[ xX]\\] (.*)$", RegexOption.MULTILINE)
+        Regex("^- \\[([ xX])] (.*)$", RegexOption.MULTILINE)
             .findAll(body)
             .map { match ->
-                val isChecked = match.groupValues[0].contains("[x") || match.groupValues[0].contains("[X")
-                val text = match.groupValues[1]
+                val isChecked = match.groupValues[1].equals("x", ignoreCase = true)
+                val text = match.groupValues[2]
                 ChecklistItem(text, isChecked)
             }
             .toList()

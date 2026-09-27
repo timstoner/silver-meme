@@ -42,12 +42,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.tmstoner.silvermeme.R
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 
@@ -66,11 +68,12 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onOpenNavigationDrawer: () -> Unit
 ) {
-    val state by viewModel.settingsState.collectAsState()
-    val isSaved by viewModel.isSaved.collectAsState()
+    val state by viewModel.settingsState.collectAsStateWithLifecycle()
+    val isSaved by viewModel.isSaved.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // Editable copies of the settings
     var remoteUrl    by remember(state.gitRemoteUrl)  { mutableStateOf(state.gitRemoteUrl)  }
@@ -82,7 +85,7 @@ fun SettingsScreen(
 
     LaunchedEffect(isSaved) {
         if (isSaved) {
-            scope.launch { snackbarHostState.showSnackbar("Settings saved") }
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_saved)) }
             viewModel.clearSavedFlag()
         }
     }
@@ -90,7 +93,7 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title  = { Text("Settings") },
+                title  = { Text(stringResource(R.string.settings_title)) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor    = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -109,7 +112,7 @@ fun SettingsScreen(
             FloatingActionButton(onClick = {
                 viewModel.saveSettings(remoteUrl, username, token, authorName, authorEmail)
             }) {
-                Icon(Icons.Filled.Done, contentDescription = "Save settings")
+                Icon(Icons.Filled.Done, contentDescription = stringResource(R.string.settings_save_action))
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -123,23 +126,23 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // ── Section: Git remote ───────────────────────────────────────────
-            Text("Git Remote", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_git_remote), style = MaterialTheme.typography.titleMedium)
 
             OutlinedTextField(
                 value         = remoteUrl,
                 onValueChange = { remoteUrl = it },
-                label         = { Text("Remote URL") },
-                placeholder   = { Text("https://github.com/user/vault.git") },
+                label         = { Text(stringResource(R.string.settings_git_url)) },
+                placeholder   = { Text(stringResource(R.string.settings_remote_example)) },
                 singleLine    = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 modifier      = Modifier.fillMaxWidth(),
-                supportingText = { Text("HTTPS URL of your git repository") }
+                supportingText = { Text(stringResource(R.string.settings_https_hint)) }
             )
 
             OutlinedTextField(
                 value         = username,
                 onValueChange = { username = it },
-                label         = { Text("Username") },
+                label         = { Text(stringResource(R.string.settings_git_username)) },
                 singleLine    = true,
                 modifier      = Modifier.fillMaxWidth()
             )
@@ -147,7 +150,7 @@ fun SettingsScreen(
             OutlinedTextField(
                 value                  = token,
                 onValueChange          = { token = it },
-                label                  = { Text("Personal Access Token") },
+                label                  = { Text(stringResource(R.string.settings_git_token)) },
                 singleLine             = true,
                 visualTransformation   = if (tokenVisible) VisualTransformation.None
                                          else PasswordVisualTransformation(),
@@ -157,26 +160,28 @@ fun SettingsScreen(
                         Icon(
                             imageVector        = if (tokenVisible) Icons.Filled.VisibilityOff
                                                 else Icons.Filled.Visibility,
-                            contentDescription = if (tokenVisible) "Hide token" else "Show token"
+                            contentDescription = stringResource(
+                                if (tokenVisible) R.string.settings_token_hide else R.string.settings_token_show
+                            )
                         )
                     }
                 },
                 modifier               = Modifier.fillMaxWidth(),
-                supportingText         = { Text("GitHub PAT with repo scope") }
+                supportingText         = { Text(stringResource(R.string.settings_token_scope_hint)) }
             )
 
             Spacer(Modifier.height(8.dp))
 
             // ── Section: Appearance ────────────────────────────────────────────
-            Text("Appearance", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_appearance), style = MaterialTheme.typography.titleMedium)
 
             val themeOptions = listOf(
-                "system" to "System default",
-                "light"  to "Light",
-                "dark"   to "Dark"
+                "system" to R.string.settings_theme_system,
+                "light"  to R.string.settings_theme_light,
+                "dark"   to R.string.settings_theme_dark
             )
             Column(Modifier.selectableGroup()) {
-                themeOptions.forEach { (value, label) ->
+                themeOptions.forEach { (value, labelRes) ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -193,7 +198,7 @@ fun SettingsScreen(
                             onClick  = { viewModel.setThemeMode(value) }
                         )
                         Spacer(Modifier.height(0.dp))
-                        Text(label, modifier = Modifier.padding(start = 8.dp))
+                        Text(stringResource(labelRes), modifier = Modifier.padding(start = 8.dp))
                     }
                 }
             }
@@ -201,12 +206,12 @@ fun SettingsScreen(
             Spacer(Modifier.height(8.dp))
 
             // ── Section: Git author ───────────────────────────────────────────
-            Text("Git Author", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_git_author), style = MaterialTheme.typography.titleMedium)
 
             OutlinedTextField(
                 value         = authorName,
                 onValueChange = { authorName = it },
-                label         = { Text("Author name") },
+                label         = { Text(stringResource(R.string.settings_author_name)) },
                 singleLine    = true,
                 modifier      = Modifier.fillMaxWidth()
             )
@@ -214,7 +219,7 @@ fun SettingsScreen(
             OutlinedTextField(
                 value         = authorEmail,
                 onValueChange = { authorEmail = it },
-                label         = { Text("Author email") },
+                label         = { Text(stringResource(R.string.settings_author_email)) },
                 singleLine    = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier      = Modifier.fillMaxWidth()
@@ -224,7 +229,7 @@ fun SettingsScreen(
 
             // ── Vault path (read-only, informational) ─────────────────────────
             if (state.vaultPath.isNotBlank()) {
-                Text("Vault location", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.settings_vault_location), style = MaterialTheme.typography.titleMedium)
                 Text(
                     state.vaultPath,
                     style = MaterialTheme.typography.bodySmall,

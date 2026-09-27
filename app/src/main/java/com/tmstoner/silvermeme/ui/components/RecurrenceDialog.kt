@@ -31,10 +31,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.data.model.RecurrenceFrequency
 import com.tmstoner.silvermeme.data.model.RecurrenceRule
 import java.time.DayOfWeek
 import java.time.temporal.ChronoUnit
+import java.time.format.TextStyle
+import java.util.Locale
 
 /**
  * Dialog for configuring a [RecurrenceRule] ("Schedule" feature) with cron-like options:
@@ -57,7 +62,7 @@ fun RecurrenceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Schedule") },
+        title = { Text(stringResource(R.string.label_schedule)) },
         text = {
             Column {
                 Column(Modifier.selectableGroup()) {
@@ -73,14 +78,14 @@ fun RecurrenceDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(selected = frequency == freq, onClick = { frequency = freq })
-                            Text(freq.label, modifier = Modifier.padding(start = 8.dp))
+                            Text(freq.localizedLabel(), modifier = Modifier.padding(start = 8.dp))
                         }
                     }
                 }
 
                 if (frequency == RecurrenceFrequency.WEEKLY) {
                     Spacer(Modifier.height(4.dp))
-                    Text("Repeat on (optional)", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.schedule_repeat_on_optional), style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         DayOfWeek.entries.forEach { day ->
@@ -90,7 +95,9 @@ fun RecurrenceDialog(
                                     selectedDays = if (selectedDays.contains(day)) selectedDays - day
                                                    else selectedDays + day
                                 },
-                                label = { Text(day.name.take(1)) }
+                                label = {
+                                    Text(day.getDisplayName(TextStyle.NARROW, Locale.getDefault()))
+                                }
                             )
                         }
                     }
@@ -101,8 +108,8 @@ fun RecurrenceDialog(
                     OutlinedTextField(
                         value           = dayOfMonth,
                         onValueChange   = { v -> dayOfMonth = v.filter { it.isDigit() }.take(2) },
-                        label           = { Text("Day of month (optional)") },
-                        placeholder     = { Text("Same as due date") },
+                        label           = { Text(stringResource(R.string.schedule_day_of_month_optional)) },
+                        placeholder     = { Text(stringResource(R.string.schedule_same_as_due_date)) },
                         singleLine      = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
@@ -111,7 +118,7 @@ fun RecurrenceDialog(
                 if (frequency == RecurrenceFrequency.CUSTOM) {
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Every")
+                        Text(stringResource(R.string.schedule_every))
                         Spacer(Modifier.width(8.dp))
                         OutlinedTextField(
                             value           = intervalCount,
@@ -158,20 +165,29 @@ fun RecurrenceDialog(
                     intervalUnit  = intervalUnit
                 )
                 onConfirm(rule)
-            }) { Text("OK") }
+            }) { Text(stringResource(R.string.action_confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
 
-private fun unitLabel(unit: ChronoUnit, count: Int): String {
-    val plural = count != 1
-    return when (unit) {
-        ChronoUnit.DAYS   -> if (plural) "days" else "day"
-        ChronoUnit.WEEKS  -> if (plural) "weeks" else "week"
-        ChronoUnit.MONTHS -> if (plural) "months" else "month"
-        else              -> unit.name.lowercase()
+@Composable
+private fun RecurrenceFrequency.localizedLabel(): String = stringResource(
+    when (this) {
+        RecurrenceFrequency.NONE -> R.string.schedule_frequency_none
+        RecurrenceFrequency.DAILY -> R.string.schedule_frequency_daily
+        RecurrenceFrequency.WEEKLY -> R.string.schedule_frequency_weekly
+        RecurrenceFrequency.MONTHLY -> R.string.schedule_frequency_monthly
+        RecurrenceFrequency.CUSTOM -> R.string.schedule_frequency_custom
     }
+)
+
+@Composable
+private fun unitLabel(unit: ChronoUnit, count: Int): String = when (unit) {
+    ChronoUnit.DAYS -> pluralStringResource(R.plurals.recurrence_days, count)
+    ChronoUnit.WEEKS -> pluralStringResource(R.plurals.recurrence_weeks, count)
+    ChronoUnit.MONTHS -> pluralStringResource(R.plurals.recurrence_months, count)
+    else -> pluralStringResource(R.plurals.recurrence_days, count)
 }
