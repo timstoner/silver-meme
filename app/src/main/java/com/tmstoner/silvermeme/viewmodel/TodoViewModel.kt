@@ -439,6 +439,11 @@ class TodoViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Unfiltered task totals displayed by the home dashboard. */
+    val dashboardSummary: StateFlow<DashboardSummary> =
+        _uiState.map { state -> DashboardSummary.fromTodos(state.todos) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardSummary())
+
     // ── Level of Effort (LOE) capacity planning (Track F) ────────────────────────
 
     /** Sum of [TodoItem.loe] for all incomplete tasks due on [date]. */
@@ -591,6 +596,23 @@ data class TodoGroup(
     val label: String,
     val todos: List<TodoItem>
 )
+
+data class DashboardSummary(
+    val openTasks: Int = 0,
+    val dueToday: Int = 0,
+    val overdue: Int = 0,
+    val completed: Int = 0
+) {
+    companion object {
+        fun fromTodos(todos: List<TodoItem>, today: LocalDate = LocalDate.now()): DashboardSummary =
+            DashboardSummary(
+                openTasks = todos.count { !it.isCompleted },
+                dueToday = todos.count { !it.isCompleted && it.dueDate == today },
+                overdue = todos.count { !it.isCompleted && it.dueDate?.isBefore(today) == true },
+                completed = todos.count { it.isCompleted }
+            )
+    }
+}
 
 enum class SortOrder(val label: String) {
     DUE_DATE_ASC("Due date ↑"),

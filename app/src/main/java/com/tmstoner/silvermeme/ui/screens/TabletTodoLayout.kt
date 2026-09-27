@@ -21,12 +21,12 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.FilterAlt
@@ -85,8 +85,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun TabletTodoLayout(
     viewModel: TodoViewModel,
-    onOpenSettings: () -> Unit,
-    onOpenTrash: () -> Unit
+    onOpenNavigationDrawer: () -> Unit
 ) {
     val uiState           by viewModel.uiState.collectAsStateWithLifecycle()
     val filterState       by viewModel.filterState.collectAsStateWithLifecycle()
@@ -218,6 +217,14 @@ fun TabletTodoLayout(
                             containerColor    = MaterialTheme.colorScheme.primaryContainer,
                             titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         ),
+                        navigationIcon = {
+                            IconButton(onClick = onOpenNavigationDrawer) {
+                                Icon(
+                                    imageVector = Icons.Filled.Menu,
+                                    contentDescription = stringResource(R.string.cd_open_navigation)
+                                )
+                            }
+                        },
                         actions = {
                             IconButton(onClick = {
                                 showSearchBar = !showSearchBar
@@ -272,16 +279,6 @@ fun TabletTodoLayout(
                                             }
                                         )
                                     }
-                                    DropdownMenuItem(
-                                        text        = { Text("Settings") },
-                                        leadingIcon = { Icon(Icons.Filled.Settings, null) },
-                                        onClick     = { showSortMenu = false; onOpenSettings() }
-                                    )
-                                    DropdownMenuItem(
-                                        text        = { Text("Trash") },
-                                        leadingIcon = { Icon(Icons.Filled.Delete, null) },
-                                        onClick     = { showSortMenu = false; onOpenTrash() }
-                                    )
                                 }
                             }
                         }

@@ -20,14 +20,12 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.FilterAlt
@@ -38,14 +36,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SnackbarHost
@@ -54,8 +48,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -90,8 +82,7 @@ fun TodoListScreen(
     viewModel: TodoViewModel,
     onAddTodo: () -> Unit,
     onEditTodo: (TodoItem) -> Unit,
-    onOpenSettings: () -> Unit,
-    onOpenTrash: () -> Unit
+    onOpenNavigationDrawer: () -> Unit
 ) {
     val uiState           by viewModel.uiState.collectAsStateWithLifecycle()
     val filterState       by viewModel.filterState.collectAsStateWithLifecycle()
@@ -112,8 +103,6 @@ fun TodoListScreen(
     var showConflictDialog by remember { mutableStateOf(false) }
     var conflictFiles      by remember { mutableStateOf<List<String>>(emptyList()) }
     var showPriorityMenu   by remember { mutableStateOf(false) }
-
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
     // Exit selection mode on back press
     BackHandler(enabled = isSelecting) {
@@ -147,99 +136,6 @@ fun TodoListScreen(
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                Text(
-                    "Filter",
-                    style    = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-                NavigationDrawerItem(
-                    label    = { Text("All projects") },
-                    icon     = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                    selected = filterState.project == null,
-                    onClick  = {
-                        viewModel.setFilterProject(null)
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                availableProjects.forEach { proj ->
-                    NavigationDrawerItem(
-                        label    = { Text(proj) },
-                        icon     = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                        selected = filterState.project == proj,
-                        onClick  = {
-                            viewModel.setFilterProject(proj)
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    )
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text(
-                    "Priority",
-                    style    = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                Priority.entries.forEach { p ->
-                    NavigationDrawerItem(
-                        label    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) },
-                        selected = filterState.priority == p,
-                        onClick  = {
-                            viewModel.setFilterPriority(if (filterState.priority == p) null else p)
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    )
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                NavigationDrawerItem(
-                    label    = { Text("Show completed") },
-                    icon     = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) },
-                    selected = filterState.showCompleted,
-                    onClick  = {
-                        viewModel.setFilterCompleted(!filterState.showCompleted)
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label    = { Text("Overdue only") },
-                    selected = filterState.showOverdue,
-                    onClick  = {
-                        viewModel.setFilterOverdue(!filterState.showOverdue)
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                NavigationDrawerItem(
-                    label    = { Text("Reset filters") },
-                    icon     = { Icon(Icons.Filled.RestartAlt, contentDescription = null) },
-                    selected = false,
-                    onClick  = {
-                        viewModel.resetFilters()
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                NavigationDrawerItem(
-                    label    = { Text("Trash") },
-                    icon     = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                    selected = false,
-                    onClick  = {
-                        scope.launch { drawerState.close() }
-                        onOpenTrash()
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-            }
-        }
-    ) {
     Scaffold(
         topBar = {
             Column {
@@ -315,8 +211,11 @@ fun TodoListScreen(
                         titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
                     navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Filled.Menu, contentDescription = "Open filters")
+                        IconButton(onClick = onOpenNavigationDrawer) {
+                            Icon(
+                                Icons.Filled.Menu,
+                                contentDescription = stringResource(R.string.cd_open_navigation)
+                            )
                         }
                     },
                     actions = {
@@ -372,11 +271,6 @@ fun TodoListScreen(
                                         }
                                     )
                                 }
-                                DropdownMenuItem(
-                                    text    = { Text("Settings") },
-                                    leadingIcon = { Icon(Icons.Filled.Settings, null) },
-                                    onClick = { showSortMenu = false; onOpenSettings() }
-                                )
                             }
                         }
                     }
@@ -401,6 +295,24 @@ fun TodoListScreen(
                 // Filter chips
                 AnimatedVisibility(visible = showFilterPanel) {
                     Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                        androidx.compose.foundation.lazy.LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            item {
+                                FilterChip(
+                                    selected = filterState.project == null,
+                                    onClick = { viewModel.setFilterProject(null) },
+                                    label = { Text("All projects") }
+                                )
+                            }
+                            items(availableProjects, key = { it }) { project ->
+                                FilterChip(
+                                    selected = filterState.project == project,
+                                    onClick = { viewModel.setFilterProject(project) },
+                                    label = { Text(project) }
+                                )
+                            }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(
                                 selected = filterState.showCompleted,
@@ -536,7 +448,6 @@ fun TodoListScreen(
             }
         }
     }
-    } // end ModalNavigationDrawer
 
     // Conflict resolution dialog — shown when a pull/push results in a merge conflict
     if (showConflictDialog) {

@@ -2,9 +2,19 @@ package com.tmstoner.silvermeme.ui.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -13,11 +23,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navOptions
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.tmstoner.silvermeme.R
+import com.tmstoner.silvermeme.ui.screens.DashboardScreen
 import com.tmstoner.silvermeme.ui.screens.SettingsScreen
 import com.tmstoner.silvermeme.ui.screens.TabletTodoLayout
 import com.tmstoner.silvermeme.ui.screens.TodoDetailScreen
@@ -25,8 +39,11 @@ import com.tmstoner.silvermeme.ui.screens.TodoListScreen
 import com.tmstoner.silvermeme.ui.screens.TrashScreen
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 object Routes {
+    const val DASHBOARD = "dashboard"
     const val TODO_LIST = "todo_list"
     const val TODO_NEW = "todo_new"
     const val TODO_EDIT = "todo_edit/{todoId}"
@@ -43,10 +60,83 @@ fun AppNavGraph(
     settingsViewModel: SettingsViewModel,
     isTablet: Boolean = false
 ) {
-    NavHost(
-        navController = navController,
-        startDestination = Routes.TODO_LIST
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+
+    fun navigateFromDrawer(route: String) {
+        if (currentRoute != route) {
+            navController.navigate(
+                route,
+                navOptions {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            )
+        }
+        scope.launch { drawerState.close() }
+    }
+
+    val openNavigationDrawer: () -> Unit = {
+        scope.launch { drawerState.open() }
+        Unit
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge
+                )
+                NavigationDrawerItem(
+                    label = { Text(stringResource(R.string.destination_dashboard)) },
+                    icon = { androidx.compose.material3.Icon(Icons.Filled.Home, contentDescription = null) },
+                    selected = currentRoute == Routes.DASHBOARD,
+                    onClick = { navigateFromDrawer(Routes.DASHBOARD) }
+                )
+                NavigationDrawerItem(
+                    label = { Text(stringResource(R.string.destination_tasks)) },
+                    icon = { androidx.compose.material3.Icon(Icons.Filled.List, contentDescription = null) },
+                    selected = currentRoute == Routes.TODO_LIST,
+                    onClick = { navigateFromDrawer(Routes.TODO_LIST) }
+                )
+                NavigationDrawerItem(
+                    label = { Text(stringResource(R.string.destination_trash)) },
+                    icon = { androidx.compose.material3.Icon(Icons.Filled.Delete, contentDescription = null) },
+                    selected = currentRoute == Routes.TRASH,
+                    onClick = { navigateFromDrawer(Routes.TRASH) }
+                )
+                NavigationDrawerItem(
+                    label = { Text(stringResource(R.string.destination_settings)) },
+                    icon = { androidx.compose.material3.Icon(Icons.Filled.Settings, contentDescription = null) },
+                    selected = currentRoute == Routes.SETTINGS,
+                    onClick = { navigateFromDrawer(Routes.SETTINGS) }
+                )
+            }
+        }
     ) {
+        NavHost(
+            navController = navController,
+            startDestination = Routes.DASHBOARD
+        ) {
+        composable(
+            route = Routes.DASHBOARD,
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "silvermeme://todo/dashboard" }
+            )
+        ) {
+            DashboardScreen(
+                viewModel = todoViewModel,
+                onOpenNavigationDrawer = openNavigationDrawer
+            )
+        }
+
         composable(
             route = Routes.TODO_LIST,
             deepLinks = listOf(
@@ -55,17 +145,15 @@ fun AppNavGraph(
         ) {
             if (isTablet) {
                 TabletTodoLayout(
-                    viewModel      = todoViewModel,
-                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    onOpenTrash    = { navController.navigate(Routes.TRASH) }
+                    viewModel = todoViewModel,
+                    onOpenNavigationDrawer = openNavigationDrawer
                 )
             } else {
                 TodoListScreen(
-                    viewModel      = todoViewModel,
-                    onAddTodo      = { navController.navigate(Routes.TODO_NEW) },
-                    onEditTodo     = { todo -> navController.navigate(Routes.todoEdit(todo.id)) },
-                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    onOpenTrash    = { navController.navigate(Routes.TRASH) }
+                    viewModel = todoViewModel,
+                    onAddTodo = { navController.navigate(Routes.TODO_NEW) },
+                    onEditTodo = { todo -> navController.navigate(Routes.todoEdit(todo.id)) },
+                    onOpenNavigationDrawer = openNavigationDrawer
                 )
             }
         }
@@ -117,15 +205,16 @@ fun AppNavGraph(
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 viewModel = settingsViewModel,
-                onBack = { navController.popBackStack() }
+                onOpenNavigationDrawer = openNavigationDrawer
             )
         }
 
         composable(Routes.TRASH) {
             TrashScreen(
                 viewModel = todoViewModel,
-                onBack    = { navController.popBackStack() }
+                onOpenNavigationDrawer = openNavigationDrawer
             )
+        }
         }
     }
 }

@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,8 +39,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.ui.components.TodoItemCard
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
@@ -54,7 +56,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun TrashScreen(
     viewModel: TodoViewModel,
-    onBack: () -> Unit
+    onOpenNavigationDrawer: () -> Unit
 ) {
     val trashedTodos     by viewModel.trashedTodos.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -71,8 +73,11 @@ fun TrashScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = onOpenNavigationDrawer) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = stringResource(R.string.cd_open_navigation)
+                        )
                     }
                 },
                 actions = {

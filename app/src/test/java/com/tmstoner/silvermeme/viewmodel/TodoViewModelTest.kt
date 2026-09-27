@@ -131,6 +131,25 @@ class TodoViewModelTest {
         assertTrue(viewModel.syncState.value is SyncState.Success)
     }
 
+    @Test
+    fun `dashboard summary counts unfiltered task states`() {
+        val today = LocalDate.of(2026, 9, 27)
+        val summary = DashboardSummary.fromTodos(
+            todos = listOf(
+                sampleTodo(id = "overdue", dueDate = today.minusDays(1)),
+                sampleTodo(id = "today", dueDate = today),
+                sampleTodo(id = "future", dueDate = today.plusDays(1)),
+                sampleTodo(id = "done-today", dueDate = today, isCompleted = true)
+            ),
+            today = today
+        )
+
+        assertEquals(3, summary.openTasks)
+        assertEquals(1, summary.dueToday)
+        assertEquals(1, summary.overdue)
+        assertEquals(1, summary.completed)
+    }
+
     private fun sampleTodo(
         id: String,
         title: String = "Task",
