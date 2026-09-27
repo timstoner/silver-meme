@@ -17,6 +17,8 @@
     <string name="action_cancel">Cancel</string>
     <string name="action_delete">Delete</string>
     <string name="action_save">Save</string>
+    <string name="action_create_task">Create task</string>
+    <string name="action_save_task">Save task</string>
     <string name="settings_git_remote">Git Remote</string>
     <string name="settings_git_url">Remote URL</string>
     <string name="settings_git_username">Username</string>

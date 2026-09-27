@@ -18,19 +18,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,8 +50,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.data.model.LevelOfEffort
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.RecurrenceRule
@@ -201,9 +202,19 @@ fun TodoDetailScreen(
                 }
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(onClick = ::onSave) {
-                Icon(Icons.Filled.Done, contentDescription = "Save")
+        bottomBar = {
+            Button(
+                onClick = ::onSave,
+                enabled = !uiState.isSaving,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    stringResource(
+                        if (isEditing) R.string.action_save_task else R.string.action_create_task
+                    )
+                )
             }
         }
     ) { padding ->
@@ -429,8 +440,6 @@ fun TodoDetailScreen(
                     }
                 }
             }
-
-            Spacer(Modifier.height(72.dp)) // Room for FAB
         }
     }
 
