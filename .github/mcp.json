@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "agent-device": {
+      "type": "local",
+      "command": "agent-device",
+      "args": [
+        "mcp"
+      ],
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}
