@@ -24,10 +24,10 @@ object TodoWidgetDeepLinks {
         .appendPath("new")
         .build()
 
-    fun editTodoUri(todoId: String): Uri = Uri.Builder()
+    fun viewTodoUri(todoId: String): Uri = Uri.Builder()
         .scheme(SCHEME)
         .authority(HOST)
-        .appendPath("edit")
+        .appendPath("view")
         .appendQueryParameter("todoId", todoId)
         .build()
 

@@ -19,6 +19,16 @@
     <string name="action_save">Save</string>
     <string name="action_create_task">Create task</string>
     <string name="action_save_task">Save task</string>
+    <string name="action_edit_task">Edit task</string>
+    <string name="title_task_details">Task details</string>
+    <string name="cd_back">Back</string>
+    <string name="task_status_open">Open</string>
+    <string name="task_status_completed">Completed</string>
+    <string name="task_no_notes">No notes</string>
+    <string name="label_project">Project</string>
+    <string name="label_schedule">Schedule</string>
+    <string name="label_loe">Level of effort</string>
+    <string name="label_checklist">Checklist</string>
     <string name="destination_dashboard">Dashboard</string>
     <string name="destination_tasks">Tasks</string>
     <string name="destination_trash">Trash</string>

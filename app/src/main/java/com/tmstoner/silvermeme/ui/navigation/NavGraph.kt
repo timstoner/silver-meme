@@ -3,9 +3,9 @@ package com.tmstoner.silvermeme.ui.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
@@ -36,6 +36,7 @@ import com.tmstoner.silvermeme.ui.screens.SettingsScreen
 import com.tmstoner.silvermeme.ui.screens.TabletTodoLayout
 import com.tmstoner.silvermeme.ui.screens.TodoDetailScreen
 import com.tmstoner.silvermeme.ui.screens.TodoListScreen
+import com.tmstoner.silvermeme.ui.screens.TodoViewScreen
 import com.tmstoner.silvermeme.ui.screens.TrashScreen
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
@@ -46,10 +47,12 @@ object Routes {
     const val DASHBOARD = "dashboard"
     const val TODO_LIST = "todo_list"
     const val TODO_NEW = "todo_new"
+    const val TODO_VIEW = "todo_view/{todoId}"
     const val TODO_EDIT = "todo_edit/{todoId}"
     const val SETTINGS = "settings"
     const val TRASH = "trash"
 
+    fun todoView(todoId: String) = "todo_view/$todoId"
     fun todoEdit(todoId: String) = "todo_edit/$todoId"
 }
 
@@ -65,7 +68,7 @@ fun AppNavGraph(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    fun navigateFromDrawer(route: String) {
+    fun navigateFromDrawer(route: String): Unit {
         if (currentRoute != route) {
             navController.navigate(
                 route,
@@ -81,9 +84,8 @@ fun AppNavGraph(
         scope.launch { drawerState.close() }
     }
 
-    val openNavigationDrawer: () -> Unit = {
+    val openNavigationDrawer: () -> Unit = fun() {
         scope.launch { drawerState.open() }
-        Unit
     }
 
     ModalNavigationDrawer(
@@ -102,7 +104,7 @@ fun AppNavGraph(
                 )
                 NavigationDrawerItem(
                     label = { Text(stringResource(R.string.destination_tasks)) },
-                    icon = { androidx.compose.material3.Icon(Icons.Filled.List, contentDescription = null) },
+                    icon = { androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
                     selected = currentRoute == Routes.TODO_LIST,
                     onClick = { navigateFromDrawer(Routes.TODO_LIST) }
                 )
@@ -152,7 +154,7 @@ fun AppNavGraph(
                 TodoListScreen(
                     viewModel = todoViewModel,
                     onAddTodo = { navController.navigate(Routes.TODO_NEW) },
-                    onEditTodo = { todo -> navController.navigate(Routes.todoEdit(todo.id)) },
+                    onEditTodo = { todo -> navController.navigate(Routes.todoView(todo.id)) },
                     onOpenNavigationDrawer = openNavigationDrawer
                 )
             }
@@ -169,6 +171,37 @@ fun AppNavGraph(
                 existingTodo = null,
                 onBack = { navController.popBackStack() }
             )
+        }
+
+        composable(
+            route = Routes.TODO_VIEW,
+            arguments = listOf(navArgument("todoId") { type = NavType.StringType }),
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "silvermeme://todo/view?todoId={todoId}" }
+            )
+        ) { backStackEntry ->
+            val todoId = backStackEntry.arguments?.getString("todoId").orEmpty()
+            val uiState by todoViewModel.uiState.collectAsStateWithLifecycle()
+            val todo = uiState.todos.firstOrNull { it.id == todoId }
+
+            if (uiState.isLoading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (todo == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = stringResource(R.string.todo_not_found),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            } else {
+                TodoViewScreen(
+                    todo = todo,
+                    onEdit = { navController.navigate(Routes.todoEdit(todo.id)) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
         }
 
         composable(

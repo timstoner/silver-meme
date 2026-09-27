@@ -68,7 +68,7 @@ private class TodoAgendaRemoteViewsFactory(
             setTextViewText(R.id.widget_todo_due, dueSummary)
             setOnClickFillInIntent(
                 R.id.widget_todo_item_root,
-                Intent(Intent.ACTION_VIEW, TodoWidgetDeepLinks.editTodoUri(todo.id))
+                Intent(Intent.ACTION_VIEW, TodoWidgetDeepLinks.viewTodoUri(todo.id))
             )
         }
     }

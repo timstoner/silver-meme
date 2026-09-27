@@ -113,6 +113,7 @@ fun TabletTodoLayout(
     // non-null = edit-existing mode
     // absent (pane not open) = represented by selectedTodoId == null AND newTaskRequested == false
     var newTaskRequested by remember { mutableStateOf(false) }
+    var editingSelectedTodo by remember { mutableStateOf(false) }
 
     val selectedTodo: TodoItem? = selectedTodoId?.let { id ->
         uiState.todos.firstOrNull { it.id == id }
@@ -452,6 +453,7 @@ fun TabletTodoLayout(
                                                         viewModel.toggleSelection(t.id)
                                                     } else {
                                                         newTaskRequested = false
+                                                        editingSelectedTodo = false
                                                         viewModel.selectTodoForPane(t.id)
                                                     }
                                                 },
@@ -499,14 +501,27 @@ fun TabletTodoLayout(
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator()
                             }
+                        } else if (selectedTodo != null) {
+                            if (editingSelectedTodo) {
+                                TodoDetailScreen(
+                                    viewModel = viewModel,
+                                    existingTodo = selectedTodo,
+                                    onBack = { editingSelectedTodo = false }
+                                )
+                            } else {
+                                TodoViewScreen(
+                                    todo = selectedTodo,
+                                    onEdit = { editingSelectedTodo = true },
+                                    onBack = { viewModel.selectTodoForPane(null) }
+                                )
+                            }
                         } else {
-                            TodoDetailScreen(
-                                viewModel    = viewModel,
-                                existingTodo = selectedTodo,
-                                onBack       = {
-                                    viewModel.selectTodoForPane(null)
-                                }
-                            )
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = stringResource(R.string.todo_not_found),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
                         }
                     }
                     else -> {
