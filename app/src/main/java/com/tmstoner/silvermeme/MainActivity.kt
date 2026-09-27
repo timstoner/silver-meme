@@ -23,6 +23,7 @@ import com.tmstoner.silvermeme.ui.navigation.AppNavGraph
 import com.tmstoner.silvermeme.ui.theme.SilvermemeTheme
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
+import com.tmstoner.silvermeme.viewmodel.ProjectViewModel
 import com.tmstoner.silvermeme.widgets.TodoWidgetDeepLinks
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -73,11 +74,15 @@ class MainActivity : ComponentActivity() {
                     val todoViewModel: TodoViewModel = viewModel(
                         factory = TodoViewModel.Factory(app.todoRepository, app.settingsDataStore, app.notificationScheduler)
                     )
+                    val projectViewModel: ProjectViewModel = viewModel(
+                        factory = ProjectViewModel.Factory(app.todoRepository)
+                    )
                     val todoUiState by todoViewModel.uiState.collectAsStateWithLifecycle()
 
                     AppNavGraph(
                         navController     = navController,
                         todoViewModel     = todoViewModel,
+                        projectViewModel  = projectViewModel,
                         settingsViewModel = settingsViewModel,
                         isTablet          = isTablet
                     )

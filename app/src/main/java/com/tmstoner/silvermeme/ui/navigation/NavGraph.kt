@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
@@ -40,6 +41,10 @@ import com.tmstoner.silvermeme.ui.screens.TodoViewScreen
 import com.tmstoner.silvermeme.ui.screens.TrashScreen
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
+import com.tmstoner.silvermeme.viewmodel.ProjectViewModel
+import com.tmstoner.silvermeme.ui.screens.ProjectsScreen
+import com.tmstoner.silvermeme.ui.screens.ProjectEditorScreen
+import com.tmstoner.silvermeme.ui.screens.ProjectDetailScreen
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 
@@ -51,9 +56,15 @@ object Routes {
     const val TODO_EDIT = "todo_edit/{todoId}"
     const val SETTINGS = "settings"
     const val TRASH = "trash"
+    const val PROJECTS = "projects"
+    const val PROJECT_NEW = "project_new"
+    const val PROJECT_DETAIL = "project_detail/{projectId}"
+    const val TODO_NEW_PROJECT = "todo_new/{projectId}"
 
     fun todoView(todoId: String) = "todo_view/$todoId"
     fun todoEdit(todoId: String) = "todo_edit/$todoId"
+    fun projectDetail(projectId: String) = "project_detail/$projectId"
+    fun todoNewForProject(projectId: String) = "todo_new/$projectId"
 }
 
 @Composable
@@ -61,6 +72,7 @@ fun AppNavGraph(
     navController: NavHostController,
     todoViewModel: TodoViewModel,
     settingsViewModel: SettingsViewModel,
+    projectViewModel: ProjectViewModel,
     isTablet: Boolean = false
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -95,6 +107,12 @@ fun AppNavGraph(
                 Text(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleLarge
+                )
+                NavigationDrawerItem(
+                    label = { Text(stringResource(R.string.destination_projects)) },
+                    icon = { androidx.compose.material3.Icon(Icons.Filled.Folder, contentDescription = null) },
+                    selected = currentRoute == Routes.PROJECTS,
+                    onClick = { navigateFromDrawer(Routes.PROJECTS) }
                 )
                 NavigationDrawerItem(
                     label = { Text(stringResource(R.string.destination_dashboard)) },
@@ -139,6 +157,32 @@ fun AppNavGraph(
             )
         }
 
+        composable(Routes.PROJECTS) {
+            ProjectsScreen(
+                viewModel = projectViewModel,
+                onOpen = { project -> navController.navigate(Routes.projectDetail(project.id)) },
+                onCreate = { navController.navigate(Routes.PROJECT_NEW) },
+                onOpenDrawer = openNavigationDrawer
+            )
+        }
+        composable(Routes.PROJECT_NEW) {
+            ProjectEditorScreen(projectViewModel, null) { navController.popBackStack() }
+        }
+        composable("project_edit/{projectId}", arguments = listOf(navArgument("projectId") { type = NavType.StringType })) { entry ->
+            val projects by projectViewModel.uiState.collectAsStateWithLifecycle()
+            val project = projects.projects.firstOrNull { it.id == entry.arguments?.getString("projectId") }
+            if (project != null) ProjectEditorScreen(projectViewModel, project) { navController.popBackStack() }
+        }
+        composable(Routes.PROJECT_DETAIL, arguments = listOf(navArgument("projectId") { type = NavType.StringType })) { entry ->
+            ProjectDetailScreen(
+                viewModel = projectViewModel,
+                projectId = entry.arguments?.getString("projectId").orEmpty(),
+                onBack = { navController.popBackStack() },
+                onAddTask = { project -> navController.navigate(Routes.todoNewForProject(project.id)) },
+                onEdit = { project -> navController.navigate("project_edit/${project.id}") }
+            )
+        }
+
         composable(
             route = Routes.TODO_LIST,
             deepLinks = listOf(
@@ -170,6 +214,20 @@ fun AppNavGraph(
             TodoDetailScreen(
                 viewModel = todoViewModel,
                 existingTodo = null,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = Routes.TODO_NEW_PROJECT,
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+        ) { entry ->
+            val projectId = entry.arguments?.getString("projectId").orEmpty()
+            val projectState by projectViewModel.uiState.collectAsStateWithLifecycle()
+            val project = projectState.projects.firstOrNull { it.id == projectId }
+            TodoDetailScreen(
+                viewModel = todoViewModel,
+                existingTodo = null,
+                projectDefaults = project,
                 onBack = { navController.popBackStack() }
             )
         }

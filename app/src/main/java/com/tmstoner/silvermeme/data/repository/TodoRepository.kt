@@ -2,6 +2,8 @@ package com.tmstoner.silvermeme.data.repository
 
 import android.content.Context
 import com.tmstoner.silvermeme.data.model.SampleDataProvider
+import com.tmstoner.silvermeme.data.model.Project
+import com.tmstoner.silvermeme.data.model.ProjectMetrics
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
 import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
@@ -78,6 +80,36 @@ class TodoRepository(
         markdownFileManager(snapshot).getAllTodos()
     }
 
+    override suspend fun getProjects(): List<Project> = withContext(Dispatchers.IO) {
+        val snapshot = settings.snapshot()
+        markdownFileManager(snapshot).getAllProjects()
+    }
+
+    override suspend fun getProject(id: String): Project? = withContext(Dispatchers.IO) {
+        val snapshot = settings.snapshot()
+        markdownFileManager(snapshot).getProject(id)
+    }
+
+    override suspend fun getTodosForProject(
+        projectPath: String,
+        includeNested: Boolean
+    ): List<TodoItem> = withContext(Dispatchers.IO) {
+        val snapshot = settings.snapshot()
+        markdownFileManager(snapshot).getTodosForProject(projectPath, includeNested)
+    }
+
+    override suspend fun getProjectTaskCount(projectPath: String, includeNested: Boolean): Int =
+        withContext(Dispatchers.IO) {
+            val snapshot = settings.snapshot()
+            markdownFileManager(snapshot).getProjectTaskCount(projectPath, includeNested)
+        }
+
+    override suspend fun getProjectMetrics(projectPath: String, today: LocalDate): ProjectMetrics =
+        withContext(Dispatchers.IO) {
+            val snapshot = settings.snapshot()
+            markdownFileManager(snapshot).getProjectMetrics(projectPath, today)
+        }
+
     /** Returns incomplete overdue and due-today tasks for widget rendering. */
     override suspend fun getWidgetTodoSnapshot(today: LocalDate): WidgetTodoSnapshot = withContext(Dispatchers.IO) {
         val snapshot = settings.snapshot()
@@ -102,6 +134,52 @@ class TodoRepository(
         syncIfConfigured(snapshot)
         TodoWidgetDeepLinks.refreshWidgets(context)
         saved
+    }
+
+    override suspend fun saveProject(project: Project): Project = withContext(Dispatchers.IO) {
+        val snapshot = settings.snapshot()
+        val saved = markdownFileManager(snapshot).saveProject(project)
+        syncIfConfigured(snapshot)
+        saved
+    }
+
+    override suspend fun moveProject(
+        projectId: String,
+        destinationParentPath: String?,
+        newName: String?
+    ): Project = withContext(Dispatchers.IO) {
+        val snapshot = settings.snapshot()
+        val moved = markdownFileManager(snapshot).moveProject(projectId, destinationParentPath, newName)
+        syncIfConfigured(snapshot)
+        TodoWidgetDeepLinks.refreshWidgets(context)
+        moved
+    }
+
+    override suspend fun archiveProject(projectId: String): Project = withContext(Dispatchers.IO) {
+        val snapshot = settings.snapshot()
+        val archived = markdownFileManager(snapshot).archiveProject(projectId)
+        syncIfConfigured(snapshot)
+        TodoWidgetDeepLinks.refreshWidgets(context)
+        archived
+    }
+
+    override suspend fun restoreProject(projectId: String): Project = withContext(Dispatchers.IO) {
+        val snapshot = settings.snapshot()
+        val restored = markdownFileManager(snapshot).restoreProject(projectId)
+        syncIfConfigured(snapshot)
+        TodoWidgetDeepLinks.refreshWidgets(context)
+        restored
+    }
+
+    override suspend fun moveTodosToProject(
+        todos: List<TodoItem>,
+        destinationProjectPath: String
+    ): List<TodoItem> = withContext(Dispatchers.IO) {
+        val snapshot = settings.snapshot()
+        val moved = markdownFileManager(snapshot).moveTodosToProject(todos, destinationProjectPath)
+        syncIfConfigured(snapshot)
+        TodoWidgetDeepLinks.refreshWidgets(context)
+        moved
     }
 
     /** Deletes [todo] and (if git is configured) commits and pushes the deletion. */

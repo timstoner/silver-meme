@@ -2,6 +2,8 @@ package com.tmstoner.silvermeme.data.repository
 
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
+import com.tmstoner.silvermeme.data.model.Project
+import com.tmstoner.silvermeme.data.model.ProjectMetrics
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -14,6 +16,26 @@ interface TodoDataSource {
     val pendingSync: Flow<Boolean> get() = emptyFlow()
 
     suspend fun getTodos(): List<TodoItem>
+    /** Project APIs have defaults so existing lightweight data sources remain source-compatible. */
+    suspend fun getProjects(): List<Project> = emptyList()
+    suspend fun getProject(id: String): Project? = null
+    suspend fun saveProject(project: Project): Project =
+        throw UnsupportedOperationException("Projects are not supported by this data source")
+    suspend fun moveProject(
+        projectId: String,
+        destinationParentPath: String? = null,
+        newName: String? = null
+    ): Project = throw UnsupportedOperationException("Projects are not supported by this data source")
+    suspend fun archiveProject(projectId: String): Project =
+        throw UnsupportedOperationException("Projects are not supported by this data source")
+    suspend fun restoreProject(projectId: String): Project =
+        throw UnsupportedOperationException("Projects are not supported by this data source")
+    suspend fun getTodosForProject(projectPath: String, includeNested: Boolean = true): List<TodoItem> = emptyList()
+    suspend fun getProjectTaskCount(projectPath: String, includeNested: Boolean = true): Int = 0
+    suspend fun getProjectMetrics(projectPath: String, today: LocalDate = LocalDate.now()): ProjectMetrics =
+        ProjectMetrics(0, 0, 0, 0, 0, null, emptyList(), 0f)
+    suspend fun moveTodosToProject(todos: List<TodoItem>, destinationProjectPath: String): List<TodoItem> =
+        throw UnsupportedOperationException("Projects are not supported by this data source")
     /**
      * Returns incomplete tasks due today or earlier, split into overdue and today buckets.
      * Results are sorted by due date ascending, then priority descending, then title/id.

@@ -77,6 +77,7 @@ import com.tmstoner.silvermeme.data.model.ChecklistItem
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.RecurrenceRule
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.model.Project
 import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
 import com.tmstoner.silvermeme.notifications.NotificationScheduler
 import com.tmstoner.silvermeme.ui.components.RecurrenceDialog
@@ -120,6 +121,7 @@ private fun decodeChecklist(value: String): List<ChecklistItem> =
 fun TodoDetailScreen(
     viewModel: TodoViewModel,
     existingTodo: TodoItem? = null,
+    projectDefaults: Project? = null,
     onBack: () -> Unit
 ) {
     val uiState           by viewModel.uiState.collectAsStateWithLifecycle()
@@ -138,26 +140,26 @@ fun TodoDetailScreen(
     var title    by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.title   ?: "") }
     var notes    by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.content ?: "") }
     var dueDate  by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.dueDate) }
-    var reminderEnabled by rememberSaveable(existingTodo?.id) {
-        mutableStateOf(existingTodo?.reminderEnabled ?: true)
+    var reminderEnabled by rememberSaveable(existingTodo?.id, projectDefaults?.id) {
+        mutableStateOf(existingTodo?.reminderEnabled ?: projectDefaults?.reminderEnabled ?: true)
     }
     var reminderTimeText by rememberSaveable(existingTodo?.id) {
-        mutableStateOf(existingTodo?.reminderTime?.toString().orEmpty())
+        mutableStateOf(existingTodo?.reminderTime?.toString() ?: projectDefaults?.reminderTime?.toString().orEmpty())
     }
-    var priority by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.priority ?: Priority.MEDIUM) }
+    var priority by rememberSaveable(existingTodo?.id, projectDefaults?.id) { mutableStateOf(existingTodo?.priority ?: projectDefaults?.defaultPriority ?: Priority.MEDIUM) }
     var location by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.location ?: "") }
-    var loe      by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.loe ?: 0) }
-    var project  by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.project ?: "") }
+    var loe      by rememberSaveable(existingTodo?.id, projectDefaults?.id) { mutableStateOf(existingTodo?.loe ?: projectDefaults?.loe ?: 0) }
+    var project  by rememberSaveable(existingTodo?.id, projectDefaults?.id) { mutableStateOf(existingTodo?.project ?: projectDefaults?.path ?: "") }
 
     // Fix 4: tags stored as a comma-separated string for Saveable compatibility
     var tagsString by rememberSaveable(existingTodo?.id) {
-        mutableStateOf(existingTodo?.tags?.joinToString(",") ?: "")
+        mutableStateOf(existingTodo?.tags?.joinToString(",") ?: projectDefaults?.tags?.joinToString(",").orEmpty())
     }
     val tags: List<String> = tagsString.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
     // Fix 4: recurrence stored as its storage string for Saveable compatibility
     var recurrenceString by rememberSaveable(existingTodo?.id) {
-        mutableStateOf(existingTodo?.recurrence ?: "none")
+        mutableStateOf(existingTodo?.recurrence ?: projectDefaults?.recurrence ?: "none")
     }
     val recurrenceRule = RecurrenceRule.parse(recurrenceString)
     var checklistState by rememberSaveable(existingTodo?.id) {
