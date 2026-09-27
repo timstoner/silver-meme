@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -20,7 +21,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
@@ -36,12 +36,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SnackbarHost
@@ -79,7 +77,7 @@ import kotlinx.coroutines.launch
 /**
  * Two-pane layout for tablet landscape mode (WindowWidthSizeClass ≥ Medium).
  *
- * Left pane  (~350 dp, fixed): permanent project/folder filter drawer + task list.
+ * Left pane  (~350 dp, fixed): task list with optional compact filters.
  * Right pane (remaining space): detail / edit form for the selected task, or an
  *             empty-state prompt when nothing is selected.
  */
@@ -305,34 +303,59 @@ fun TabletTodoLayout(
                     ) {}
                 }
 
-                // Filter chips (conditional)
+                // Compact, horizontally scrolling filters keep the task list usable on landscape tablets.
                 if (showFilterPanel) {
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = filterState.project == null,
+                                onClick = { viewModel.setFilterProject(null) },
+                                label = { Text("All projects") }
+                            )
+                        }
+                        items(availableProjects, key = { it }) { project ->
+                            FilterChip(
+                                selected = filterState.project == project,
+                                onClick = { viewModel.setFilterProject(project) },
+                                label = { Text(project) }
+                            )
+                        }
+                        item {
                             FilterChip(
                                 selected = filterState.showCompleted,
                                 onClick  = { viewModel.setFilterCompleted(!filterState.showCompleted) },
                                 label    = { Text("Show done") },
                                 leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) }
                             )
+                        }
+                        item {
                             FilterChip(
                                 selected = filterState.showOverdue,
                                 onClick  = { viewModel.setFilterOverdue(!filterState.showOverdue) },
                                 label    = { Text("Overdue") }
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Priority.entries.forEach { p ->
-                                FilterChip(
-                                    selected = filterState.priority == p,
-                                    onClick  = {
-                                        viewModel.setFilterPriority(
-                                            if (filterState.priority == p) null else p
-                                        )
-                                    },
-                                    label = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) }
-                                )
-                            }
+                        items(Priority.entries.toList(), key = { it.name }) { priority ->
+                            FilterChip(
+                                selected = filterState.priority == priority,
+                                onClick  = {
+                                    viewModel.setFilterPriority(
+                                        if (filterState.priority == priority) null else priority
+                                    )
+                                },
+                                label = { Text(priority.label.replaceFirstChar { it.uppercaseChar() }) }
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = false,
+                                onClick = { viewModel.resetFilters() },
+                                label = { Text("Reset") },
+                                leadingIcon = { Icon(Icons.Filled.RestartAlt, null) }
+                            )
                         }
                     }
                 }
@@ -368,74 +391,6 @@ fun TabletTodoLayout(
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
 
-                    // ── Permanent project / folder drawer ──────────────────────
-                    Surface(tonalElevation = 2.dp) {
-                        Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                            Text(
-                                "Filter",
-                                style    = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                            )
-                            NavigationDrawerItem(
-                                label    = { Text("All projects") },
-                                icon     = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                                selected = filterState.project == null,
-                                onClick  = { viewModel.setFilterProject(null) },
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
-                            availableProjects.forEach { proj ->
-                                NavigationDrawerItem(
-                                    label    = { Text(proj) },
-                                    icon     = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                                    selected = filterState.project == proj,
-                                    onClick  = { viewModel.setFilterProject(proj) },
-                                    modifier = Modifier.padding(horizontal = 12.dp)
-                                )
-                            }
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            Text(
-                                "Priority",
-                                style    = MaterialTheme.typography.labelLarge,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                            )
-                            Priority.entries.forEach { p ->
-                                NavigationDrawerItem(
-                                    label    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) },
-                                    selected = filterState.priority == p,
-                                    onClick  = {
-                                        viewModel.setFilterPriority(
-                                            if (filterState.priority == p) null else p
-                                        )
-                                    },
-                                    modifier = Modifier.padding(horizontal = 12.dp)
-                                )
-                            }
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            NavigationDrawerItem(
-                                label    = { Text("Show completed") },
-                                icon     = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) },
-                                selected = filterState.showCompleted,
-                                onClick  = { viewModel.setFilterCompleted(!filterState.showCompleted) },
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
-                            NavigationDrawerItem(
-                                label    = { Text("Overdue only") },
-                                selected = filterState.showOverdue,
-                                onClick  = { viewModel.setFilterOverdue(!filterState.showOverdue) },
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            NavigationDrawerItem(
-                                label    = { Text("Reset filters") },
-                                icon     = { Icon(Icons.Filled.RestartAlt, contentDescription = null) },
-                                selected = false,
-                                onClick  = { viewModel.resetFilters() },
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
-                        }
-                    }
-
-                    HorizontalDivider()
 
                     // ── Task list ──────────────────────────────────────────────
                     val isRefreshing = syncState is SyncState.Syncing
