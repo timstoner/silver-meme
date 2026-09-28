@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -190,6 +191,7 @@ fun SettingsScreen(
                                 onClick  = { viewModel.setThemeMode(value) },
                                 role     = Role.RadioButton
                             )
+                            .heightIn(min = 48.dp)
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -199,6 +201,42 @@ fun SettingsScreen(
                         )
                         Spacer(Modifier.height(0.dp))
                         Text(stringResource(labelRes), modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // ── Dashboard ────────────────────────────────────────────────────
+            Text(stringResource(R.string.settings_dashboard), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.settings_dashboard_stale_threshold_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            val staleThresholdOptions = listOf(12, 24, 48, 168)
+            Column(Modifier.selectableGroup()) {
+                staleThresholdOptions.forEach { hours ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = state.dashboardStaleThresholdHours == hours,
+                                onClick = { viewModel.setDashboardStaleThresholdHours(hours) },
+                                role = Role.RadioButton
+                            )
+                            .heightIn(min = 48.dp)
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = state.dashboardStaleThresholdHours == hours,
+                            onClick = { viewModel.setDashboardStaleThresholdHours(hours) }
+                        )
+                        Text(
+                            stringResource(R.string.settings_dashboard_stale_threshold_option, hours),
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
                     }
                 }
             }

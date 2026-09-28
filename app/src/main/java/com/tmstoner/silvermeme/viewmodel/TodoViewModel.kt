@@ -379,7 +379,25 @@ class TodoViewModel(
         updateFilter { it.copy(showCompleted = showCompleted) }
 
     fun setFilterOverdue(showOverdue: Boolean) =
-        updateFilter { it.copy(showOverdue = showOverdue) }
+        updateFilter { it.copy(showOverdue = showOverdue, showDueToday = false) }
+
+    /**
+     * Limits the list to incomplete work that is overdue or due today.
+     *
+     * This is intentionally a separate persisted filter instead of reusing the
+     * overdue filter: the dashboard's Today count includes both date buckets.
+     * Existing project, search, priority, and sort choices remain in effect.
+     */
+    fun setFilterDueToday(showDueToday: Boolean) =
+        updateFilter {
+            it.copy(
+                showDueToday = showDueToday,
+                // The dashboard destination is always incomplete work. Keeping
+                // these mutually exclusive avoids a contradictory empty list.
+                showCompleted = if (showDueToday) false else it.showCompleted,
+                showOverdue = if (showDueToday) false else it.showOverdue
+            )
+        }
 
     fun setSortOrder(order: SortOrder) =
         updateFilter { it.copy(sortOrder = order) }
@@ -408,6 +426,8 @@ class TodoViewModel(
     /** True if [todo] matches the current [FilterState]. */
     private fun matchesFilter(todo: TodoItem, filter: FilterState, today: LocalDate): Boolean =
         (filter.showCompleted || !todo.isCompleted) &&
+        (!filter.showDueToday ||
+            (!todo.isCompleted && todo.dueDate?.let { due -> !due.isAfter(today) } == true)) &&
         (filter.priority == null || todo.priority == filter.priority) &&
         (!filter.showOverdue || (todo.dueDate?.isBefore(today) == true)) &&
         (filter.project == null || todo.project == filter.project) &&
@@ -704,6 +724,8 @@ data class FilterState(
     val priority: Priority? = null,
     val showCompleted: Boolean = false,
     val showOverdue: Boolean = false,
+    /** Incomplete tasks with a due date no later than today. */
+    val showDueToday: Boolean = false,
     val searchQuery: String = "",
     val sortOrder: SortOrder = SortOrder.DUE_DATE_ASC,
     val project: String? = null

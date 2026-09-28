@@ -13,8 +13,8 @@ folders, project filters, checklists, recurring tasks, bulk task actions, soft
 delete and restore, reminder scheduling, conflict resolution, and retry after
 network recovery.
 
-The app also has a four-count dashboard, a quick-create widget, and an agenda
-widget. It does not yet have full project records or a customizable dashboard.
+The app also has project records, a customizable dashboard, a quick-create
+widget, and an agenda widget.
 
 ## Phase 1 — Project management **complete**
 
@@ -32,27 +32,31 @@ archive/restore, and bulk task moves. Local-only operations work without a Git
 remote; configured remotes receive one automatic synchronization per complete
 project operation.
 
-## Phase 2 — Customizable dashboard
+## Phase 2 — Customizable dashboard **complete**
 
-The current dashboard shows four count cards. It has no interactive metrics,
-sections, or editor.
+The dashboard now has interactive metrics, Today and project-health sections,
+quick actions, a phone/tablet layout, and a persisted per-vault editor for
+section visibility, order, density, project/time filters, and presets.
 
-Implement the dashboard requirements in Sections 8 and 13 of
-`FEATURE_REQUIREMENTS.md`:
-
-- Make each metric open its matching task or project view.
-- Add Today, Project health, Quick actions, Task summary, and Sync status.
-- Add controls to show, hide, reorder, resize, and filter dashboard sections.
-- Save layouts per vault and add default and preset layouts.
-- Use one column on phones and an adaptive grid on tablets.
+- [x] Wire dashboard metric/task and project navigation, quick actions, and
+  dashboard presentation sections. The Today metric and “View today’s tasks”
+  preserve the user's other task filters while adding a persisted
+  incomplete-overdue-or-due-today constraint. Today task rows open individual
+  task detail and label overdue versus due-today status in text.
+- [x] Provide phone one-column and tablet adaptive-grid dashboard presentation.
+- [x] Provide accessible dashboard editor controls for visibility, order, size,
+  project/time filters, reset, and supplied presets.
+- [x] Save layouts per vault and provide default/preset layout data.
+- [x] Render the model-provided dynamic project-filter display name, including
+  projects that have no project-health entry.
+- [x] Render the last successful sync timestamp in text when it is available.
+- [x] Describe stale sync state in text (not color alone) and let the user
+  select a persisted stale-sync threshold in Settings.
 - Keep cached data visible while sync runs.
 
-**Depends on:** Phase 1 project records for project health and project filters.
-Resolve dashboard storage and project-risk rules in Section 14 of
-`FEATURE_REQUIREMENTS.md`.
-
-**Acceptance:** Dashboard choices survive restart and remain separate per
-vault. All controls work at phone and tablet sizes with large text.
+All first-release dashboard requirements listed above are delivered. The stale
+state is calculated from the persisted threshold and last successful sync time;
+the UI states that condition in text as well as using the error color.
 
 ## Phase 3 — Daily workflow improvements
 

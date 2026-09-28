@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -18,6 +19,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.security.MessageDigest
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "silver_meme_settings")
 
@@ -45,6 +48,7 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
         private val KEY_THEME_MODE        = stringPreferencesKey("theme_mode")
         private val KEY_LAST_FILTER_STATE = stringPreferencesKey("last_filter_state")
         private val KEY_PENDING_SYNC = booleanPreferencesKey("pending_sync")
+        private val KEY_SYNC_STALE_THRESHOLD_MILLIS = longPreferencesKey("sync_stale_threshold_millis")
 
         // EncryptedSharedPreferences key for the PAT
         private const val ENCRYPTED_PREFS_FILE = "secure_settings"
@@ -128,6 +132,25 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
     override val pendingSync: Flow<Boolean> = context.dataStore.data
         .map { it[KEY_PENDING_SYNC] ?: false }
 
+    override val syncStaleThresholdMillis: Flow<Long> = context.dataStore.data
+        .map {
+            it[KEY_SYNC_STALE_THRESHOLD_MILLIS]
+                ?.takeIf { threshold -> threshold > 0L }
+                ?: SettingsStore.DEFAULT_SYNC_STALE_THRESHOLD_MILLIS
+        }
+
+    override fun dashboardLayout(vaultPath: String): Flow<String> {
+        val key = stringPreferencesKey("dashboard_layout_${dashboardVaultKey(vaultPath)}")
+        return context.dataStore.data.map { it[key] ?: "" }
+    }
+
+    override fun lastSuccessfulSyncTime(vaultPath: String): Flow<Long?> {
+        val key = androidx.datastore.preferences.core.longPreferencesKey(
+            "last_successful_sync_${dashboardVaultKey(vaultPath)}"
+        )
+        return context.dataStore.data.map { it[key] }
+    }
+
     override suspend fun snapshot(): SettingsSnapshot {
         val preferences = context.dataStore.data.first()
         return SettingsSnapshot(
@@ -185,6 +208,41 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
 
     override suspend fun setPendingSync(pending: Boolean) {
         context.dataStore.edit { it[KEY_PENDING_SYNC] = pending }
+    }
+
+    override suspend fun setSyncStaleThresholdMillis(thresholdMillis: Long) {
+        context.dataStore.edit {
+            it[KEY_SYNC_STALE_THRESHOLD_MILLIS] =
+                thresholdMillis.takeIf { threshold -> threshold > 0L }
+                    ?: SettingsStore.DEFAULT_SYNC_STALE_THRESHOLD_MILLIS
+        }
+    }
+
+    override suspend fun setDashboardLayout(vaultPath: String, serialized: String) {
+        val key = stringPreferencesKey("dashboard_layout_${dashboardVaultKey(vaultPath)}")
+        context.dataStore.edit { preferences ->
+            if (serialized.isBlank()) preferences.remove(key) else preferences[key] = serialized
+        }
+    }
+
+    override suspend fun setLastSuccessfulSyncTime(vaultPath: String, epochMillis: Long) {
+        val key = androidx.datastore.preferences.core.longPreferencesKey(
+            "last_successful_sync_${dashboardVaultKey(vaultPath)}"
+        )
+        context.dataStore.edit { it[key] = epochMillis }
+    }
+
+    /**
+     * A canonicalized path distinguishes vaults while the digest keeps arbitrary
+     * filesystem characters out of Preferences keys. This is not a secret.
+     */
+    private fun dashboardVaultKey(vaultPath: String): String {
+        val normalized = runCatching { File(vaultPath).canonicalPath }
+            .getOrDefault(File(vaultPath).absoluteFile.normalize().path)
+            .trimEnd(File.separatorChar)
+        val bytes = MessageDigest.getInstance("SHA-256")
+            .digest(normalized.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
     /** Returns a snapshot of all settings (non-reactive, for one-shot reads). */

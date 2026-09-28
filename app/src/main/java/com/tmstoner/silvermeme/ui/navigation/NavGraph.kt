@@ -42,6 +42,8 @@ import com.tmstoner.silvermeme.ui.screens.TrashScreen
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 import com.tmstoner.silvermeme.viewmodel.ProjectViewModel
+import com.tmstoner.silvermeme.viewmodel.DashboardViewModel
+import com.tmstoner.silvermeme.ui.screens.DashboardTaskDestination
 import com.tmstoner.silvermeme.ui.screens.ProjectsScreen
 import com.tmstoner.silvermeme.ui.screens.ProjectEditorScreen
 import com.tmstoner.silvermeme.ui.screens.ProjectDetailScreen
@@ -73,6 +75,7 @@ fun AppNavGraph(
     todoViewModel: TodoViewModel,
     settingsViewModel: SettingsViewModel,
     projectViewModel: ProjectViewModel,
+    dashboardViewModel: DashboardViewModel,
     isTablet: Boolean = false
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -152,8 +155,29 @@ fun AppNavGraph(
             )
         ) {
             DashboardScreen(
-                viewModel = todoViewModel,
-                onOpenNavigationDrawer = openNavigationDrawer
+                viewModel = dashboardViewModel,
+                isTablet = isTablet,
+                onOpenNavigationDrawer = openNavigationDrawer,
+                onOpenTasks = { section ->
+                    // The task list remains the owner of its persisted filters.
+                    // Dashboard drill-downs add only their destination constraint,
+                    // preserving the user's project, search, priority, and sort choices.
+                    when (section) {
+                        DashboardTaskDestination.OVERDUE -> todoViewModel.setFilterOverdue(true)
+                        DashboardTaskDestination.TODAY -> todoViewModel.setFilterDueToday(true)
+                        DashboardTaskDestination.COMPLETED -> todoViewModel.setFilterCompleted(true)
+                        else -> Unit
+                    }
+                    navigateFromDrawer(Routes.TODO_LIST)
+                },
+                onOpenTask = { todoId ->
+                    navController.navigate(Routes.todoView(todoId))
+                },
+                onOpenProject = { projectId ->
+                    navController.navigate(Routes.projectDetail(projectId))
+                },
+                onNewTask = { navController.navigate(Routes.TODO_NEW) },
+                onNewProject = { navController.navigate(Routes.PROJECT_NEW) }
             )
         }
 

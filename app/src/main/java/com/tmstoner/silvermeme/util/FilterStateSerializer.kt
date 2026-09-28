@@ -11,7 +11,7 @@ import java.net.URLEncoder
  * in [com.tmstoner.silvermeme.data.storage.SettingsStore.lastFilterState].
  *
  * Avoids pulling in a JSON library for a handful of scalar fields. Format:
- * `priority=<NAME|NONE>|showCompleted=<bool>|showOverdue=<bool>|searchQuery=<url-encoded>|sortOrder=<NAME>|project=<url-encoded|NONE>`
+ * `priority=<NAME|NONE>|showCompleted=<bool>|showOverdue=<bool>|showDueToday=<bool>|searchQuery=<url-encoded>|sortOrder=<NAME>|project=<url-encoded|NONE>`
  */
 object FilterStateSerializer {
 
@@ -22,6 +22,7 @@ object FilterStateSerializer {
             "priority" to (state.priority?.name ?: NONE),
             "showCompleted" to state.showCompleted.toString(),
             "showOverdue" to state.showOverdue.toString(),
+            "showDueToday" to state.showDueToday.toString(),
             "searchQuery" to encode(state.searchQuery),
             "sortOrder" to state.sortOrder.name,
             "project" to (state.project?.let { encode(it) } ?: NONE)
@@ -43,6 +44,9 @@ object FilterStateSerializer {
                 priority = map["priority"]?.takeIf { it != NONE }?.let { runCatching { Priority.valueOf(it) }.getOrNull() },
                 showCompleted = map["showCompleted"]?.toBooleanStrictOrNull() ?: false,
                 showOverdue = map["showOverdue"]?.toBooleanStrictOrNull() ?: false,
+                // Absent in snapshots written before the dashboard Today filter
+                // was added, so those snapshots remain valid.
+                showDueToday = map["showDueToday"]?.toBooleanStrictOrNull() ?: false,
                 searchQuery = map["searchQuery"]?.let { decode(it) } ?: "",
                 sortOrder = map["sortOrder"]?.let { runCatching { SortOrder.valueOf(it) }.getOrNull() } ?: SortOrder.DUE_DATE_ASC,
                 project = map["project"]?.takeIf { it != NONE }?.let { decode(it) }

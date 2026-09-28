@@ -7,6 +7,7 @@ import com.tmstoner.silvermeme.data.storage.SettingsDataStore
 import com.tmstoner.silvermeme.domain.widget.LoadWidgetTodosUseCase
 import com.tmstoner.silvermeme.notifications.NotificationScheduler
 import com.tmstoner.silvermeme.notifications.PendingSyncWorker
+import com.tmstoner.silvermeme.viewmodel.DashboardViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,5 +48,10 @@ class SilverMemeApplication : Application() {
 
     val notificationScheduler: NotificationScheduler by lazy {
         NotificationScheduler(applicationContext)
+    }
+
+    /** Factory for the dashboard's local-only, device-layout view model. */
+    val dashboardViewModelFactory: DashboardViewModel.Factory by lazy {
+        DashboardViewModel.Factory(todoRepository, settingsDataStore)
     }
 }

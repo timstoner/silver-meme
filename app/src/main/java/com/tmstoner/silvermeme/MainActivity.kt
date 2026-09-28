@@ -24,6 +24,7 @@ import com.tmstoner.silvermeme.ui.theme.SilvermemeTheme
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 import com.tmstoner.silvermeme.viewmodel.ProjectViewModel
+import com.tmstoner.silvermeme.viewmodel.DashboardViewModel
 import com.tmstoner.silvermeme.widgets.TodoWidgetDeepLinks
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -77,12 +78,17 @@ class MainActivity : ComponentActivity() {
                     val projectViewModel: ProjectViewModel = viewModel(
                         factory = ProjectViewModel.Factory(app.todoRepository)
                     )
+                    val dashboardViewModel: DashboardViewModel = viewModel(
+                        factory = app.dashboardViewModelFactory
+                    )
                     val todoUiState by todoViewModel.uiState.collectAsStateWithLifecycle()
+                    val projectUiState by projectViewModel.uiState.collectAsStateWithLifecycle()
 
                     AppNavGraph(
                         navController     = navController,
                         todoViewModel     = todoViewModel,
                         projectViewModel  = projectViewModel,
+                        dashboardViewModel = dashboardViewModel,
                         settingsViewModel = settingsViewModel,
                         isTablet          = isTablet
                     )
@@ -94,6 +100,13 @@ class MainActivity : ComponentActivity() {
 
                     LaunchedEffect(todoUiState.todos) {
                         TodoWidgetDeepLinks.refreshWidgets(applicationContext)
+                    }
+
+                    // The dashboard owns independently loaded, derived data. Refresh it
+                    // after either source list changes so local CRUD is reflected without
+                    // waiting for automatic sync (or a return to the dashboard).
+                    LaunchedEffect(todoUiState.todos, projectUiState.projects) {
+                        dashboardViewModel.reload()
                     }
                 }
             }

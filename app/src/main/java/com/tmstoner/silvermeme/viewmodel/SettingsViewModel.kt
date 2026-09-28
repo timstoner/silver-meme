@@ -30,8 +30,9 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
             settingsDataStore.authorName,
             settingsDataStore.authorEmail
         ) { path, name, email -> Triple(path, name, email) },
-        settingsDataStore.themeMode
-    ) { (url, user, token), (path, name, email), themeMode ->
+        settingsDataStore.themeMode,
+        settingsDataStore.dashboardStaleThresholdHours
+    ) { (url, user, token), (path, name, email), themeMode, staleThresholdHours ->
         SettingsUiState(
             gitRemoteUrl = url,
             gitUsername  = user,
@@ -39,7 +40,8 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
             vaultPath    = path,
             authorName   = name,
             authorEmail  = email,
-            themeMode    = themeMode
+            themeMode    = themeMode,
+            dashboardStaleThresholdHours = staleThresholdHours
         )
     }.stateIn(
         scope = viewModelScope,
@@ -76,6 +78,13 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
         }
     }
 
+    /** Updates the duration after which dashboard sync information is called stale. */
+    fun setDashboardStaleThresholdHours(hours: Int) {
+        viewModelScope.launch {
+            settingsDataStore.setDashboardStaleThresholdHours(hours)
+        }
+    }
+
     fun clearSavedFlag() {
         _isSaved.value = false
     }
@@ -97,5 +106,6 @@ data class SettingsUiState(
     val authorName:   String = "SilverMeme",
     val authorEmail:  String = "silvermeme@local",
     /** "system", "light", or "dark". */
-    val themeMode:    String = "system"
+    val themeMode:    String = "system",
+    val dashboardStaleThresholdHours: Int = 24
 )
