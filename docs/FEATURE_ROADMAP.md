@@ -273,9 +273,8 @@ _Last reviewed 2026-10-06 against the code on `main`._
 - [x] A3 — Encrypted credential storage (`4ad01f3`; PAT in `EncryptedSharedPreferences` with migration)
 - [x] B1 — Swipe-to-complete / swipe-to-delete (swipe right toggles done, swipe left trashes with Undo snackbar)
 - [x] B2 — Multi-select mode (selection UI)
-- [ ] C — Notifications & reminders — **partial**: WorkManager reminders, cancel on complete/trash,
-      and `BootReceiver` are done. Still missing: the runtime `POST_NOTIFICATIONS` request on
-      Android 13+ (`NotificationScheduler` only *checks* it, so reminders never fire until the user grants it in system settings).
+- [x] C — Notifications & reminders (WorkManager reminders, cancel on complete/trash, `BootReceiver`;
+      `POST_NOTIFICATIONS` requested on first launch on Android 13+, reminders rescheduled once granted)
 - [x] D — Testing & CI infrastructure (`TodoDataSource` seam, `TodoViewModelTest`, round-trip helper, `.github/workflows/android-test.yml`)
 - [ ] E1 — Checklists / subtasks — **partial**: `checklist` model + markdown `- [ ]` round-trip done
       and covered by tests. Still missing: the checklist editor in `TodoDetailScreen` and the "2/5" progress on `TodoItemCard`.
@@ -284,7 +283,7 @@ _Last reviewed 2026-10-06 against the code on `main`._
 - [x] F — Bulk actions (`81dfd26`; `bulkSave`/`bulkTrash` sync once per batch)
 - [ ] G1 — Background periodic sync
 - [ ] G2 — Multi-vault support
-- [ ] G3 — Quick-add widget / shortcut
+- [x] G3 — Quick-add widget / shortcut (`70c4214`; quick-create and agenda widgets in `widgets/`)
 - [x] G4 — Trash / undo (`bca1d42`; `Tasks/.trash/`, Trash screen, 30-day purge, Undo on swipe-trash)
 - [ ] G5 — Obsidian wikilink support
 
@@ -293,4 +292,13 @@ _Last reviewed 2026-10-06 against the code on `main`._
       The navigation drawer is now for navigation only (All tasks, projects, Trash, Settings).
 - [x] App bar reduced to menu + search + overflow (Sync now, Settings). The redundant filter
       toggle and refresh buttons are gone; pull-to-refresh and the auto-sync on open still sync.
+- [x] Quick-add bar at the bottom of the list: `Buy milk tomorrow !high #errand` parses date,
+      priority and tags inline (`QuickAddParser`), with a live preview of what was recognised.
+- [x] "Today's effort" capacity bar at the top of the list (today's LOE vs. daily capacity).
+- [x] Task cards: one wrapping metadata line (date, location, project, up to 3 tags), priority
+      chip only for High/Urgent, a single overdue style.
+- [x] Task form: segmented priority, tap-anywhere date field with Today/Tomorrow/Next week chips,
+      Enter/comma adds tags, Mark done and Move to trash from the edit screen.
+- Note: the tablet two-pane layout (`TabletTodoLayout.kt`) has its own list header, so swipe,
+  the chip row, quick-add and the capacity bar are phone-only for now.
 

@@ -215,7 +215,6 @@ private class FakeTodoDataSource(
     override suspend fun trashTodo(todo: TodoItem): TodoItem {
         todos.removeAll { it.id == todo.id }
         val trashed = todo.copy(filePath = "Tasks/.trash/${todo.id}.md")
-        trashed
         return trashed
     }
 
