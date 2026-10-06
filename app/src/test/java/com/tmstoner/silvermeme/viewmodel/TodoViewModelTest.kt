@@ -2,6 +2,7 @@ package com.tmstoner.silvermeme.viewmodel
 
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
 import com.tmstoner.silvermeme.data.repository.GitRepository
 import com.tmstoner.silvermeme.data.repository.TodoDataSource
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +77,49 @@ class TodoViewModelTest {
     }
 
     @Test
+    fun `toggleComplete on recurring todo spawns next occurrence with advanced due date`() = runTest {
+        val today = LocalDate.now()
+        val todo = sampleTodo(
+            id = "recurring",
+            title = "Water plants",
+            dueDate = today,
+            isCompleted = false,
+            recurrence = "daily"
+        )
+        val repository = FakeTodoDataSource(mutableListOf(todo))
+        val viewModel = TodoViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.toggleComplete(todo)
+        advanceUntilIdle()
+
+        // The original occurrence is saved as completed.
+        val originalSave = repository.saved.first { it.id == todo.id }
+        assertTrue(originalSave.isCompleted)
+
+        // A new, incomplete occurrence is spawned with a distinct id and advanced due date.
+        val spawned = repository.saved.singleOrNull { it.id != todo.id }
+        assertTrue(spawned != null)
+        assertEquals(false, spawned!!.isCompleted)
+        assertEquals(today.plusDays(1), spawned.dueDate)
+        assertTrue(spawned.filePath.isBlank())
+    }
+
+    @Test
+    fun `toggleComplete on non-recurring todo does not spawn a next occurrence`() = runTest {
+        val todo = sampleTodo(id = "one-off", isCompleted = false, recurrence = "none")
+        val repository = FakeTodoDataSource(mutableListOf(todo))
+        val viewModel = TodoViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.toggleComplete(todo)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.saved.size)
+        assertTrue(repository.saved.single().isCompleted)
+    }
+
+    @Test
     fun `syncFromRemote exposes success state`() = runTest {
         val repository = FakeTodoDataSource(mutableListOf(), pullResult = GitRepository.GitResult.Success)
         val viewModel = TodoViewModel(repository)
@@ -93,7 +137,8 @@ class TodoViewModelTest {
         dueDate: LocalDate? = null,
         priority: Priority = Priority.MEDIUM,
         tags: List<String> = emptyList(),
-        isCompleted: Boolean = false
+        isCompleted: Boolean = false,
+        recurrence: String = "none"
     ) = TodoItem(
         id = id,
         title = title,
@@ -102,6 +147,7 @@ class TodoViewModelTest {
         priority = priority,
         tags = tags,
         isCompleted = isCompleted,
+        recurrence = recurrence,
         createdAt = LocalDateTime.of(2024, 1, 1, 0, 0)
     )
 }
@@ -114,6 +160,9 @@ private class FakeTodoDataSource(
     val saved = mutableListOf<TodoItem>()
 
     override suspend fun getTodos(): List<TodoItem> = todos.toList()
+
+    override suspend fun getWidgetTodoSnapshot(today: LocalDate): WidgetTodoSnapshot =
+        WidgetTodoSnapshot.fromTodos(todos, today)
 
     override suspend fun saveTodo(todo: TodoItem, previousFilePath: String?): TodoItem {
         saved += todo

@@ -48,6 +48,21 @@ class TodoViewModel(
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
+    // ── Two-pane detail selection (tablet layout) ─────────────────────────────
+
+    /**
+     * The id of the task currently displayed in the right pane of the tablet
+     * two-pane layout.  `null` means the "no task selected" empty-state prompt
+     * is shown.  Ignored entirely on phone / portrait-tablet layouts.
+     */
+    private val _selectedTodoId = MutableStateFlow<String?>(null)
+    val selectedTodoId: StateFlow<String?> = _selectedTodoId.asStateFlow()
+
+    /** Select a task for the detail pane (tablet two-pane). */
+    fun selectTodoForPane(id: String?) {
+        _selectedTodoId.value = id
+    }
+
     // ── Selection state for bulk actions (Track B2) ────────────────────────────
 
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
@@ -185,6 +200,16 @@ class TodoViewModel(
                 val completed = todo.withCompletion(!todo.isCompleted)
                 doSave(completed, completed.filePath.takeIf { it.isNotBlank() })
 
+                // The completed/uncompleted task's own reminder is no longer relevant:
+                // cancel it either way (re-scheduled below if un-completing with a due date).
+                if (completed.isCompleted) {
+                    notificationScheduler?.cancel(completed.id)
+                } else if (completed.dueDate != null) {
+                    notificationScheduler?.schedule(completed)
+                } else {
+                    notificationScheduler?.cancel(completed.id)
+                }
+
                 // If marking complete and recurrence is set, spawn next occurrence (Track E2).
                 // Bug 3/4 fix: clear filePath so storage derives a fresh, collision-safe filename.
                 if (!todo.isCompleted && todo.recurrence != "none" && todo.dueDate != null) {
@@ -198,6 +223,8 @@ class TodoViewModel(
                             updatedAt = java.time.LocalDateTime.now()
                         )
                         doSave(nextOccurrence, null)
+                        // Schedule the reminder for the next iteration's due date.
+                        notificationScheduler?.schedule(nextOccurrence)
                     }
                 }
                 doLoad()
@@ -545,7 +572,7 @@ class TodoViewModel(
 
 data class TodoUiState(
     val todos: List<TodoItem> = emptyList(),
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val errorMessage: String? = null
 )
@@ -580,4 +607,3 @@ sealed class SyncState {
     data class Failure(val message: String) : SyncState()
     data class Conflict(val files: List<String>) : SyncState()
 }
-
