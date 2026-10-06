@@ -23,9 +23,7 @@ class BootReceiver : BroadcastReceiver() {
         // Launch a coroutine to reload todos and reschedule
         GlobalScope.launch(Dispatchers.IO) {
             try {
-                val todos = app.todoRepository.getTodos()
-                todos.filter { !it.isCompleted && it.dueDate != null }
-                    .forEach { scheduler.schedule(it) }
+                scheduler.rescheduleAll(app.todoRepository.getTodos())
             } catch (e: Exception) {
                 // Notifications are best-effort; ignore errors during reboot restore
             }
