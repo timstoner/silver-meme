@@ -80,6 +80,7 @@ import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.ui.components.ConflictResolutionDialog
+import com.tmstoner.silvermeme.ui.components.QuickAddBar
 import com.tmstoner.silvermeme.ui.components.TodoItemCard
 import com.tmstoner.silvermeme.viewmodel.FilterState
 import com.tmstoner.silvermeme.viewmodel.SortOrder
@@ -358,6 +359,15 @@ fun TodoListScreen(
         floatingActionButton = {
             FloatingActionButton(onClick = onAddTodo) {
                 Icon(Icons.Filled.Add, contentDescription = "Add new todo")
+            }
+        },
+        bottomBar = {
+            if (!isSelecting) {
+                QuickAddBar(onAdd = { parsed ->
+                    // New tasks land in the project currently being viewed, like the detail screen's picker.
+                    viewModel.saveTodo(parsed.toTodoItem(project = filterState.project))
+                    scope.launch { snackbarHostState.showSnackbar("Added \"${parsed.title}\"") }
+                })
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
