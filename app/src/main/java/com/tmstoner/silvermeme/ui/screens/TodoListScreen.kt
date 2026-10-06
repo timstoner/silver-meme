@@ -79,6 +79,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.ui.components.CapacityBar
 import com.tmstoner.silvermeme.ui.components.ConflictResolutionDialog
 import com.tmstoner.silvermeme.ui.components.QuickAddBar
 import com.tmstoner.silvermeme.ui.components.TodoItemCard
@@ -406,10 +407,17 @@ fun TodoListScreen(
                             }
                         }
                     } else {
+                        // All open tasks due today, regardless of the active filters.
+                        val todayLoe = remember(uiState.todos) { viewModel.getTodayLoe() }
                         LazyColumn(
                             contentPadding      = PaddingValues(12.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            if (todayLoe > 0) {
+                                item(key = "today_capacity", contentType = "capacity") {
+                                    CapacityBar(loe = todayLoe, capacity = TodoViewModel.DEFAULT_DAILY_CAPACITY)
+                                }
+                            }
                             groups.forEach { group ->
                                 // Fix 2: stable keys + contentType for group headers
                                 item(key = "header_${group.label}", contentType = "group_header") {
