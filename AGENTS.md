@@ -14,7 +14,7 @@ Guidance for AI coding agents working in this repository (SilverMeme — an Andr
 - **`SilverMemeApplication`** acts as a minimal manual service locator (no DI framework like Hilt/Koin). Dependencies (`SettingsDataStore`, `TodoRepository`, `NotificationScheduler`) are `by lazy` singletons exposed as `application` properties, injected into ViewModels via custom `Factory` classes (see `TodoViewModel.Factory`, `SettingsViewModel.Factory`) and wired up in `MainActivity.onCreate`. When adding a new ViewModel, follow this same Factory + Application-locator pattern rather than introducing a DI library.
 - **Notifications** (`notifications/`) — `NotificationScheduler` enqueues a WorkManager `ReminderWorker` per task due date. `TodoViewModel` takes it as an optional dependency and schedules/cancels on save, complete, and trash. `BootReceiver` and the `POST_NOTIFICATIONS` grant callback in `MainActivity` both call `rescheduleAll()`.
 - **Widgets** (`widgets/`, `domain/widget/`) — RemoteViews `AppWidgetProvider`s: a quick-create widget and an agenda list (`TodoAgendaRemoteViewsService`), fed by `LoadWidgetTodosUseCase` → `WidgetTodoSnapshot`. Widgets open the app through `silvermeme://todo/list`, `/new`, and `/edit?todoId=…` deep links (`TodoWidgetDeepLinks`), handled in `MainActivity`.
-- **Phone vs. tablet layout** — `MainActivity` uses the window size class: compact width gets the `NavGraph` (`TodoListScreen` → `TodoDetailScreen`), Medium+ width gets `TabletTodoLayout` (list and detail side by side). The tablet layout reuses `TodoItemCard` and `TodoDetailScreen` but has **its own copy** of the list top bar, filter chips, and sort menu. A change to the list header or list rows must be made in both files, or recorded as phone-only in the roadmap (swipe actions, the chip row, quick-add, and the capacity bar are currently phone-only).
+- **Phone vs. tablet layout** — `MainActivity` uses the window size class: compact width gets the `NavGraph` (`TodoListScreen` → `TodoDetailScreen`), Medium+ width gets `TabletTodoLayout` (list and detail side by side). Both layouts build their list from the same components — `FilterChipRow`, `TodoGroupList` (capacity bar, group headers, `SwipeableTodoRow` + `TodoItemCard`), `QuickAddBar` — and share `TodoDetailScreen`. Change list behavior in those components, not in either screen. Each screen still owns its own top bar, navigation (drawer on phone, project list in the left pane on tablet), and snackbars.
 
 ## Critical conventions specific to this project
 
@@ -58,8 +58,9 @@ Guidance for AI coding agents working in this repository (SilverMeme — an Andr
 - `notifications/NotificationScheduler.kt` — WorkManager scheduling for reminder notifications at task due dates; `rescheduleAll()` after boot or permission grant.
 - `viewmodel/TodoViewModel.kt` — filtering/sorting logic (`filteredTodos()`) is applied client-side over the full in-memory list each time; there's no persisted/derived filtered state. Also owns optimistic trash/undo, `toggleComplete()`, and LOE helpers (`getTodayLoe()`, `DEFAULT_DAILY_CAPACITY`).
 - `ui/navigation/NavGraph.kt` — route constants (`Routes` object) for list/new/edit/settings/trash screens; edit route carries `todoId` as a nav argument.
-- `ui/screens/TodoListScreen.kt` — phone list: navigation drawer, filter chip row, swipe actions, quick-add bar, capacity bar, multi-select.
-- `ui/screens/TabletTodoLayout.kt` — tablet two-pane layout; keep in step with `TodoListScreen` (see "Phone vs. tablet layout" above).
+- `ui/components/TodoGroupList.kt` / `ui/components/FilterChipRow.kt` — the list and filter row shared by phone and tablet; swipe actions and the trash-with-Undo snackbar helper live here.
+- `ui/screens/TodoListScreen.kt` — phone list: navigation drawer, top bar, multi-select bar.
+- `ui/screens/TabletTodoLayout.kt` — tablet two-pane layout: project list, top bar, detail pane (see "Phone vs. tablet layout" above).
 - `ui/screens/TodoDetailScreen.kt` — create/edit form, shared by phone and tablet.
 - `ui/screens/TrashScreen.kt` — soft-deleted tasks; restore and permanent delete actions.
 - `util/QuickAddParser.kt` — quick-add syntax.

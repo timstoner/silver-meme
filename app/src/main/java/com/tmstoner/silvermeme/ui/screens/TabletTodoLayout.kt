@@ -1,45 +1,39 @@
 package com.tmstoner.silvermeme.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
@@ -70,8 +64,10 @@ import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.ui.components.ConflictResolutionDialog
-import com.tmstoner.silvermeme.ui.components.TodoItemCard
-import com.tmstoner.silvermeme.viewmodel.SortOrder
+import com.tmstoner.silvermeme.ui.components.FilterChipRow
+import com.tmstoner.silvermeme.ui.components.QuickAddBar
+import com.tmstoner.silvermeme.ui.components.TodoGroupList
+import com.tmstoner.silvermeme.ui.components.showTrashedWithUndo
 import com.tmstoner.silvermeme.viewmodel.SyncState
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 import kotlinx.coroutines.launch
@@ -79,7 +75,8 @@ import kotlinx.coroutines.launch
 /**
  * Two-pane layout for tablet landscape mode (WindowWidthSizeClass ≥ Medium).
  *
- * Left pane  (~350 dp, fixed): permanent project/folder filter drawer + task list.
+ * Left pane  (~350 dp, fixed): project list, filter chip row, the shared
+ *             [TodoGroupList] (swipe actions, capacity bar), and the quick-add bar.
  * Right pane (remaining space): detail / edit form for the selected task, or an
  *             empty-state prompt when nothing is selected.
  */
@@ -103,8 +100,7 @@ fun TabletTodoLayout(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
 
-    var showFilterPanel  by remember { mutableStateOf(false) }
-    var showSortMenu     by remember { mutableStateOf(false) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
     var showSearchBar    by remember { mutableStateOf(false) }
     var searchQuery      by remember { mutableStateOf("") }
     var showConflictDialog by remember { mutableStateOf(false) }
@@ -119,6 +115,18 @@ fun TabletTodoLayout(
 
     val selectedTodo: TodoItem? = selectedTodoId?.let { id ->
         uiState.todos.firstOrNull { it.id == id }
+    }
+
+    // Exit selection mode on back press
+    BackHandler(enabled = isSelecting) {
+        viewModel.clearSelection()
+    }
+
+    // Trash a task, closing the detail pane if it was showing that task.
+    fun trashWithUndo(todo: TodoItem) {
+        if (selectedTodoId == todo.id) viewModel.selectTodoForPane(null)
+        viewModel.trashTodo(todo)
+        scope.launch { snackbarHostState.showTrashedWithUndo(viewModel::undoTrash) }
     }
 
     // Transparent remote sync on first composition
@@ -215,7 +223,7 @@ fun TabletTodoLayout(
                     )
                 } else {
                     TopAppBar(
-                        title  = { Text(stringResource(R.string.app_name)) },
+                        title  = { Text(filterState.project ?: stringResource(R.string.app_name)) },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor    = MaterialTheme.colorScheme.primaryContainer,
                             titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -230,59 +238,29 @@ fun TabletTodoLayout(
                             }) {
                                 Icon(Icons.Filled.Search, contentDescription = "Search")
                             }
-                            IconButton(onClick = { showFilterPanel = !showFilterPanel }) {
-                                Icon(
-                                    if (filterState.priority != null ||
-                                        filterState.showCompleted ||
-                                        filterState.showOverdue
-                                    ) Icons.Outlined.FilterAlt else Icons.Filled.FilterList,
-                                    contentDescription = "Filter"
-                                )
-                            }
-                            IconButton(
-                                onClick = { viewModel.syncFromRemote() },
-                                enabled = syncState !is SyncState.Syncing
-                            ) {
-                                if (syncState is SyncState.Syncing) {
-                                    CircularProgressIndicator(
-                                        modifier    = Modifier.padding(8.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Icon(Icons.Filled.Refresh, contentDescription = "Sync from remote")
-                                }
-                            }
                             Box {
-                                IconButton(onClick = { showSortMenu = true }) {
+                                IconButton(onClick = { showOverflowMenu = true }) {
                                     Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                                 }
                                 DropdownMenu(
-                                    expanded         = showSortMenu,
-                                    onDismissRequest = { showSortMenu = false }
+                                    expanded         = showOverflowMenu,
+                                    onDismissRequest = { showOverflowMenu = false }
                                 ) {
-                                    Text(
-                                        "Sort by",
-                                        style    = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                    DropdownMenuItem(
+                                        text        = { Text("Sync now") },
+                                        leadingIcon = { Icon(Icons.Filled.Refresh, null) },
+                                        enabled     = syncState !is SyncState.Syncing,
+                                        onClick     = { showOverflowMenu = false; viewModel.syncFromRemote() }
                                     )
-                                    SortOrder.entries.forEach { order ->
-                                        DropdownMenuItem(
-                                            text    = { Text(order.label) },
-                                            onClick = {
-                                                viewModel.setSortOrder(order)
-                                                showSortMenu = false
-                                            }
-                                        )
-                                    }
                                     DropdownMenuItem(
                                         text        = { Text("Settings") },
                                         leadingIcon = { Icon(Icons.Filled.Settings, null) },
-                                        onClick     = { showSortMenu = false; onOpenSettings() }
+                                        onClick     = { showOverflowMenu = false; onOpenSettings() }
                                     )
                                     DropdownMenuItem(
                                         text        = { Text("Trash") },
                                         leadingIcon = { Icon(Icons.Filled.Delete, null) },
-                                        onClick     = { showSortMenu = false; onOpenTrash() }
+                                        onClick     = { showOverflowMenu = false; onOpenTrash() }
                                     )
                                 }
                             }
@@ -303,38 +281,6 @@ fun TabletTodoLayout(
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {}
-                }
-
-                // Filter chips (conditional)
-                if (showFilterPanel) {
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = filterState.showCompleted,
-                                onClick  = { viewModel.setFilterCompleted(!filterState.showCompleted) },
-                                label    = { Text("Show done") },
-                                leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) }
-                            )
-                            FilterChip(
-                                selected = filterState.showOverdue,
-                                onClick  = { viewModel.setFilterOverdue(!filterState.showOverdue) },
-                                label    = { Text("Overdue") }
-                            )
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Priority.entries.forEach { p ->
-                                FilterChip(
-                                    selected = filterState.priority == p,
-                                    onClick  = {
-                                        viewModel.setFilterPriority(
-                                            if (filterState.priority == p) null else p
-                                        )
-                                    },
-                                    label = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) }
-                                )
-                            }
-                        }
-                    }
                 }
             }
         },
@@ -368,16 +314,16 @@ fun TabletTodoLayout(
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
 
-                    // ── Permanent project / folder drawer ──────────────────────
+                    // ── Projects (the tablet's always-visible navigation) ──────
                     Surface(tonalElevation = 2.dp) {
-                        Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                            Text(
-                                "Filter",
-                                style    = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                            )
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 240.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(vertical = 8.dp)
+                        ) {
                             NavigationDrawerItem(
-                                label    = { Text("All projects") },
+                                label    = { Text("All tasks") },
                                 icon     = { Icon(Icons.Filled.Folder, contentDescription = null) },
                                 selected = filterState.project == null,
                                 onClick  = { viewModel.setFilterProject(null) },
@@ -392,131 +338,61 @@ fun TabletTodoLayout(
                                     modifier = Modifier.padding(horizontal = 12.dp)
                                 )
                             }
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            Text(
-                                "Priority",
-                                style    = MaterialTheme.typography.labelLarge,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                            )
-                            Priority.entries.forEach { p ->
-                                NavigationDrawerItem(
-                                    label    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) },
-                                    selected = filterState.priority == p,
-                                    onClick  = {
-                                        viewModel.setFilterPriority(
-                                            if (filterState.priority == p) null else p
-                                        )
-                                    },
-                                    modifier = Modifier.padding(horizontal = 12.dp)
-                                )
-                            }
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            NavigationDrawerItem(
-                                label    = { Text("Show completed") },
-                                icon     = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) },
-                                selected = filterState.showCompleted,
-                                onClick  = { viewModel.setFilterCompleted(!filterState.showCompleted) },
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
-                            NavigationDrawerItem(
-                                label    = { Text("Overdue only") },
-                                selected = filterState.showOverdue,
-                                onClick  = { viewModel.setFilterOverdue(!filterState.showOverdue) },
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            NavigationDrawerItem(
-                                label    = { Text("Reset filters") },
-                                icon     = { Icon(Icons.Filled.RestartAlt, contentDescription = null) },
-                                selected = false,
-                                onClick  = { viewModel.resetFilters() },
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
                         }
                     }
 
                     HorizontalDivider()
+
+                    // ── Filter + sort chips (same row as the phone list) ───────
+                    if (!isSelecting) {
+                        FilterChipRow(
+                            filterState     = filterState,
+                            onSortOrder     = viewModel::setSortOrder,
+                            onToggleOverdue = { viewModel.setFilterOverdue(!filterState.showOverdue) },
+                            onPriority      = { p ->
+                                viewModel.setFilterPriority(if (filterState.priority == p) null else p)
+                            },
+                            onToggleDone    = { viewModel.setFilterCompleted(!filterState.showCompleted) },
+                            onClear         = viewModel::clearChipFilters,
+                            modifier        = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
 
                     // ── Task list ──────────────────────────────────────────────
                     val isRefreshing = syncState is SyncState.Syncing
                     PullToRefreshBox(
                         isRefreshing = isRefreshing,
                         onRefresh    = { viewModel.syncFromRemote() },
-                        modifier     = Modifier.fillMaxSize()
+                        modifier     = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            if (uiState.isLoading) {
-                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            }
+                        // All open tasks due today, regardless of the active filters.
+                        val todayLoe = remember(uiState.todos) { viewModel.getTodayLoe() }
+                        TodoGroupList(
+                            groups            = groups,
+                            isLoading         = uiState.isLoading,
+                            todayLoe          = todayLoe,
+                            selectedIds       = selectedIds,
+                            onOpen            = { t ->
+                                newTaskRequested = false
+                                viewModel.selectTodoForPane(t.id)
+                            },
+                            onToggleComplete  = viewModel::toggleComplete,
+                            onTrash           = ::trashWithUndo,
+                            onToggleSelection = { viewModel.toggleSelection(it.id) },
+                            contentPadding    = PaddingValues(8.dp),
+                            itemSpacing       = 6.dp
+                        )
+                    }
 
-                            if (!uiState.isLoading && groups.isEmpty()) {
-                                Box(
-                                    Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(
-                                            "No todos found",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.height(8.dp))
-                                        Text(
-                                            "Tap + to create one, or pull to sync",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            } else {
-                                LazyColumn(
-                                    contentPadding      = PaddingValues(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    groups.forEach { group ->
-                                        item(
-                                            key         = "header_${group.label}",
-                                            contentType = "group_header"
-                                        ) {
-                                            Text(
-                                                text     = "${group.label} (${group.todos.size})",
-                                                style    = MaterialTheme.typography.titleSmall,
-                                                color    = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(vertical = 4.dp)
-                                            )
-                                        }
-                                        items(
-                                            items       = group.todos,
-                                            key         = { it.id },
-                                            contentType = { "todo_card" }
-                                        ) { todo ->
-                                            TodoItemCard(
-                                                todo              = todo,
-                                                onToggleComplete  = {
-                                                    if (!isSelecting) viewModel.toggleComplete(it)
-                                                },
-                                                onClick           = { t ->
-                                                    if (isSelecting) {
-                                                        viewModel.toggleSelection(t.id)
-                                                    } else {
-                                                        newTaskRequested = false
-                                                        viewModel.selectTodoForPane(t.id)
-                                                    }
-                                                },
-                                                onLongClick       = { t ->
-                                                    viewModel.toggleSelection(t.id)
-                                                },
-                                                isSelected        = todo.id in selectedIds,
-                                                onSelectionToggle = if (isSelecting) {
-                                                    { viewModel.toggleSelection(todo.id) }
-                                                } else null,
-                                                modifier          = Modifier.animateItem()
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    // ── Quick add ──────────────────────────────────────────────
+                    if (!isSelecting) {
+                        QuickAddBar(onAdd = { parsed ->
+                            // New tasks land in the project currently being viewed.
+                            viewModel.saveTodo(parsed.toTodoItem(project = filterState.project))
+                            scope.launch { snackbarHostState.showSnackbar("Added \"${parsed.title}\"") }
+                        })
                     }
                 }
             }
