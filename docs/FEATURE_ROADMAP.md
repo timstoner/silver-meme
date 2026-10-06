@@ -1,5 +1,10 @@
 # SilverMeme — Feature Roadmap & Delegation Plan
 
+> **Status (2026-10-06):** Tracks A–F, G3 and G4 are done; E1 is partial.
+> Remaining and newly identified work is in **Next tracks** near the end of
+> this document — start there. The original track write-ups below are kept
+> as the spec/history for completed work.
+>
 > Source: app review conducted 2026-07-30. This document breaks recommended
 > work into **independent tracks** that can be delegated to separate agents
 > and implemented concurrently, plus tracks that must be **serialized**
@@ -101,6 +106,8 @@ Track A2).
   path.
 - **Acceptance:** swipe right completes/uncompletes, swipe left opens the
   existing delete confirmation; no regression to click/long-click handlers.
+- _As built:_ swipe left moves to trash immediately with an Undo snackbar
+  (soft delete from G4 made the confirmation dialog unnecessary).
 
 ### B2. Multi-select mode (selection UI only — precursor to Track F)
 - Add a "selection mode" toggled by long-press, with checkboxes overlaying
@@ -117,7 +124,7 @@ Track A2).
 ## Track C — Notifications & Reminders  [PARALLEL-SAFE]
 
 **Owns:** new `notifications/` package (`NotificationScheduler.kt`,
-`ReminderReceiver.kt`), `AndroidManifest.xml` (permission + receiver
+`ReminderWorker.kt`, `BootReceiver.kt`), `AndroidManifest.xml` (permission + receiver
 declarations), `ui/screens/TodoDetailScreen.kt` (additive "Remind me" toggle
 field only — new UI element, no edits to existing fields' logic),
 `viewmodel/TodoViewModel.kt` (additive hook in `saveTodo`/`deleteTodo` to
@@ -223,7 +230,6 @@ plus the relevant editor UI in `TodoDetailScreen.kt` and display in
   "auto-push on write" behavior.
 - **Owns:** new `sync/SyncWorker.kt`, `SettingsDataStore.kt` (new toggle key),
   `SettingsScreen.kt` (new switch).
-  `SettingsScreen.kt` (new switch).
 
 ### G2. Multi-vault support
 - Allow switching between multiple git-backed vaults.
@@ -234,6 +240,8 @@ plus the relevant editor UI in `TodoDetailScreen.kt` and display in
 - Glance widget or `ShortcutManager` entry to create a task without opening
   the app.
 - **Owns:** new `widget/` package, `AndroidManifest.xml` additions.
+- _As built:_ RemoteViews quick-create and agenda widgets in `widgets/`,
+  with `silvermeme://todo/...` deep links (`70c4214`).
 
 ### G4. Trash / undo (soft delete)
 - Move deleted files to `Tasks/.trash/` instead of hard delete; add "Undo"
@@ -302,3 +310,56 @@ _Last reviewed 2026-10-06 against the code on `main`._
 - Note: the tablet two-pane layout (`TabletTodoLayout.kt`) has its own list header, so swipe,
   the chip row, quick-add and the capacity bar are phone-only for now.
 
+---
+
+## Next tracks (2026-10-06)
+
+Same rules as above: one track per agent, the file list is the unit of
+parallelism. H1 and H2 both touch `TodoListScreen.kt`/`TabletTodoLayout.kt`
+— run them one after the other. The rest are parallel-safe with each other.
+
+### H1. Tablet parity for the list screen  [touches both list layouts]
+- Bring swipe actions, the single filter chip row, the quick-add bar and the
+  capacity bar to `TabletTodoLayout`. Prefer extracting the shared pieces
+  (`FilterChipRow`, `SwipeableTodoRow`, the list header) out of
+  `TodoListScreen.kt` into `ui/components/` so both layouts call one
+  implementation, instead of copying them a second time.
+- **Owns:** `ui/screens/TodoListScreen.kt`, `ui/screens/TabletTodoLayout.kt`,
+  new files in `ui/components/`.
+- **Acceptance:** on a tablet-width emulator the list pane matches the phone
+  list; no behavior change on phones.
+
+### H2. E1 finish — checklist editor and card progress  [after H1]
+- Checklist editor in `TodoDetailScreen` (add, tick, reorder, delete rows);
+  "2/5" progress on `TodoItemCard`. Model and markdown round-trip already
+  exist — no frontmatter change.
+- **Owns:** `ui/screens/TodoDetailScreen.kt`, `ui/components/TodoItemCard.kt`.
+- **Acceptance:** checklist edits round-trip through save/reload; cards with
+  no checklist look unchanged.
+
+### H3. Configurable daily capacity  [PARALLEL-SAFE]
+- Replace `TodoViewModel.DEFAULT_DAILY_CAPACITY` with a Settings value
+  (default unchanged); hide the capacity bar when capacity is 0.
+- **Owns:** `SettingsStore.kt`, `SettingsDataStore.kt`, `SettingsScreen.kt`,
+  `SettingsViewModel.kt`, `TodoViewModel.kt` (capacity read only).
+- **Acceptance:** changing the setting updates the bar; existing installs see
+  the old default.
+
+### H4. Build: drop the `org.jetbrains.kotlin.android` plugin  [PARALLEL-SAFE]
+- AGP 9 has built-in Kotlin; remove the deprecated plugin per the AGP 9
+  migration guide and clear the build warning.
+- **Owns:** `build.gradle.kts`, `app/build.gradle.kts`, `settings.gradle.kts`.
+- **Acceptance:** `./gradlew :app:test :app:assembleDebug` passes with no
+  plugin deprecation warning; CI still green.
+
+### Still open from the original plan
+- G1 — Background periodic sync (parallel-safe with H1–H4 except H3, which
+  shares the settings files).
+- G2 — Multi-vault support (own phase; conflicts with H3 on settings files).
+- G5 — Obsidian wikilink support (conflicts with H2 on `TodoDetailScreen.kt`).
+
+### Progress
+- [ ] H1 — Tablet parity for the list screen
+- [ ] H2 — Checklist editor and card progress (completes E1)
+- [ ] H3 — Configurable daily capacity
+- [ ] H4 — Drop the deprecated Kotlin Android plugin
