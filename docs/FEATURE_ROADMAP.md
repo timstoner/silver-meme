@@ -266,20 +266,31 @@ Track F waits on Track B2. Track G waits on A–F.
 
 ## Progress tracking
 
-- [ ] A1 — Pre-push pull / safer sync sequencing
-- [ ] A2 — Conflict surfacing UI
-- [ ] A3 — Encrypted credential storage
-- [ ] B1 — Swipe-to-complete / swipe-to-delete
-- [ ] B2 — Multi-select mode (selection UI)
-- [ ] C — Notifications & reminders
-- [ ] D — Testing & CI infrastructure
-- [ ] E1 — Checklists / subtasks
-- [ ] E2 — Recurring tasks
-- [ ] E3 — Projects / folders
-- [ ] F — Bulk actions
+_Last reviewed 2026-10-06 against the code on `main`._
+
+- [x] A1 — Pre-push pull / safer sync sequencing (`4ad01f3`; `syncIfConfigured()` pulls before push)
+- [x] A2 — Conflict surfacing UI (`GitResult.Conflict` + `ConflictResolutionDialog`, wired in `26806e8`)
+- [x] A3 — Encrypted credential storage (`4ad01f3`; PAT in `EncryptedSharedPreferences` with migration)
+- [x] B1 — Swipe-to-complete / swipe-to-delete (swipe right toggles done, swipe left trashes with Undo snackbar)
+- [x] B2 — Multi-select mode (selection UI)
+- [ ] C — Notifications & reminders — **partial**: WorkManager reminders, cancel on complete/trash,
+      and `BootReceiver` are done. Still missing: the runtime `POST_NOTIFICATIONS` request on
+      Android 13+ (`NotificationScheduler` only *checks* it, so reminders never fire until the user grants it in system settings).
+- [x] D — Testing & CI infrastructure (`TodoDataSource` seam, `TodoViewModelTest`, round-trip helper, `.github/workflows/android-test.yml`)
+- [ ] E1 — Checklists / subtasks — **partial**: `checklist` model + markdown `- [ ]` round-trip done
+      and covered by tests. Still missing: the checklist editor in `TodoDetailScreen` and the "2/5" progress on `TodoItemCard`.
+- [x] E2 — Recurring tasks (`RecurrenceRule`, `RecurrenceDialog`, next occurrence spawned on complete)
+- [x] E3 — Projects / folders (recursive scan, project picker, project list in the drawer)
+- [x] F — Bulk actions (`81dfd26`; `bulkSave`/`bulkTrash` sync once per batch)
 - [ ] G1 — Background periodic sync
 - [ ] G2 — Multi-vault support
 - [ ] G3 — Quick-add widget / shortcut
-- [ ] G4 — Trash / undo
+- [x] G4 — Trash / undo (`bca1d42`; `Tasks/.trash/`, Trash screen, 30-day purge, Undo on swipe-trash)
 - [ ] G5 — Obsidian wikilink support
+
+### UI simplification (2026-10-06, follow-up to B1)
+- [x] Filters have one home: an always-visible chip row (sort, overdue, priority, show done, clear).
+      The navigation drawer is now for navigation only (All tasks, projects, Trash, Settings).
+- [x] App bar reduced to menu + search + overflow (Sync now, Settings). The redundant filter
+      toggle and refresh buttons are gone; pull-to-refresh and the auto-sync on open still sync.
 

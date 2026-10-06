@@ -11,6 +11,8 @@ import com.tmstoner.silvermeme.data.repository.TodoDataSource
 import com.tmstoner.silvermeme.data.storage.SettingsStore
 import com.tmstoner.silvermeme.notifications.NotificationScheduler
 import com.tmstoner.silvermeme.util.FilterStateSerializer
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -241,15 +243,36 @@ class TodoViewModel(
      * Call [undoTrash] within the snackbar action window to restore immediately.
      */
     fun trashTodo(todo: TodoItem) {
-        viewModelScope.launch {
+        // Optimistically hide the row so a swiped card doesn't snap back while the file moves.
+        _uiState.update { state -> state.copy(todos = state.todos.filterNot { it.id == todo.id }) }
+        lastTrash = viewModelScope.async {
             try {
-                repository.trashTodo(todo)
-                notificationScheduler?.cancel(todo.id)
-                loadTodos()
-                loadTrash()
+                repository.trashTodo(todo).also {
+                    notificationScheduler?.cancel(todo.id)
+                    loadTodos()
+                    loadTrash()
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message) }
+                loadTodos()
+                null
             }
+        }
+    }
+
+    /** Pending/finished result of the most recent [trashTodo]; consumed by [undoTrash]. */
+    private var lastTrash: Deferred<TodoItem?>? = null
+
+    /**
+     * Restores the item most recently trashed via [trashTodo]. Waits for the trash
+     * operation (which includes a git sync) to finish first, so Undo is safe to tap
+     * immediately.
+     */
+    fun undoTrash() {
+        val pending = lastTrash ?: return
+        lastTrash = null
+        viewModelScope.launch {
+            pending.await()?.let { restoreTodo(it) }
         }
     }
 
@@ -320,6 +343,10 @@ class TodoViewModel(
 
     fun setFilterProject(project: String?) =
         updateFilter { it.copy(project = project) }
+
+    /** Clears the chip-row filters (priority, done, overdue); keeps project, search and sort. */
+    fun clearChipFilters() =
+        updateFilter { it.copy(priority = null, showCompleted = false, showOverdue = false) }
 
     /** Clears all active filters back to defaults (keeps sort order). */
     fun resetFilters() =

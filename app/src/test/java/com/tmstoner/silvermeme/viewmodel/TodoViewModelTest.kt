@@ -120,6 +120,43 @@ class TodoViewModelTest {
     }
 
     @Test
+    fun `trashTodo hides item immediately and undoTrash restores it`() = runTest {
+        val todo = sampleTodo(id = "trash-me")
+        val repository = FakeTodoDataSource(mutableListOf(todo))
+        val viewModel = TodoViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.trashTodo(todo)
+        assertTrue(viewModel.uiState.value.todos.none { it.id == "trash-me" })
+
+        // Undo before the trash coroutine has run must still restore the item.
+        viewModel.undoTrash()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.todos.any { it.id == "trash-me" })
+    }
+
+    @Test
+    fun `clearChipFilters keeps project and sort order`() = runTest {
+        val viewModel = TodoViewModel(FakeTodoDataSource(mutableListOf()))
+        advanceUntilIdle()
+
+        viewModel.setFilterProject("Work")
+        viewModel.setSortOrder(SortOrder.TITLE_ASC)
+        viewModel.setFilterPriority(Priority.HIGH)
+        viewModel.setFilterOverdue(true)
+        viewModel.setFilterCompleted(true)
+        viewModel.clearChipFilters()
+
+        val state = viewModel.filterState.value
+        assertEquals(null, state.priority)
+        assertEquals(false, state.showOverdue)
+        assertEquals(false, state.showCompleted)
+        assertEquals("Work", state.project)
+        assertEquals(SortOrder.TITLE_ASC, state.sortOrder)
+    }
+
+    @Test
     fun `syncFromRemote exposes success state`() = runTest {
         val repository = FakeTodoDataSource(mutableListOf(), pullResult = GitRepository.GitResult.Success)
         val viewModel = TodoViewModel(repository)

@@ -2,6 +2,8 @@ package com.tmstoner.silvermeme.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,25 +16,25 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.FilterAlt
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,15 +50,18 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +71,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,6 +81,7 @@ import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.ui.components.ConflictResolutionDialog
 import com.tmstoner.silvermeme.ui.components.TodoItemCard
+import com.tmstoner.silvermeme.viewmodel.FilterState
 import com.tmstoner.silvermeme.viewmodel.SortOrder
 import com.tmstoner.silvermeme.viewmodel.SyncState
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
@@ -105,8 +113,7 @@ fun TodoListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
 
-    var showFilterPanel    by remember { mutableStateOf(false) }
-    var showSortMenu       by remember { mutableStateOf(false) }
+    var showOverflowMenu   by remember { mutableStateOf(false) }
     var showSearchBar      by remember { mutableStateOf(false) }
     var searchQuery        by remember { mutableStateOf("") }
     var showConflictDialog by remember { mutableStateOf(false) }
@@ -152,12 +159,12 @@ fun TodoListScreen(
         drawerContent = {
             ModalDrawerSheet {
                 Text(
-                    "Filter",
+                    stringResource(R.string.app_name),
                     style    = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(16.dp)
                 )
                 NavigationDrawerItem(
-                    label    = { Text("All projects") },
+                    label    = { Text("All tasks") },
                     icon     = { Icon(Icons.Filled.Folder, contentDescription = null) },
                     selected = filterState.project == null,
                     onClick  = {
@@ -179,54 +186,6 @@ fun TodoListScreen(
                     )
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text(
-                    "Priority",
-                    style    = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                Priority.entries.forEach { p ->
-                    NavigationDrawerItem(
-                        label    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) },
-                        selected = filterState.priority == p,
-                        onClick  = {
-                            viewModel.setFilterPriority(if (filterState.priority == p) null else p)
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    )
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                NavigationDrawerItem(
-                    label    = { Text("Show completed") },
-                    icon     = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) },
-                    selected = filterState.showCompleted,
-                    onClick  = {
-                        viewModel.setFilterCompleted(!filterState.showCompleted)
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label    = { Text("Overdue only") },
-                    selected = filterState.showOverdue,
-                    onClick  = {
-                        viewModel.setFilterOverdue(!filterState.showOverdue)
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                NavigationDrawerItem(
-                    label    = { Text("Reset filters") },
-                    icon     = { Icon(Icons.Filled.RestartAlt, contentDescription = null) },
-                    selected = false,
-                    onClick  = {
-                        viewModel.resetFilters()
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 NavigationDrawerItem(
                     label    = { Text("Trash") },
                     icon     = { Icon(Icons.Filled.Delete, contentDescription = null) },
@@ -234,6 +193,16 @@ fun TodoListScreen(
                     onClick  = {
                         scope.launch { drawerState.close() }
                         onOpenTrash()
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                NavigationDrawerItem(
+                    label    = { Text("Settings") },
+                    icon     = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                    selected = false,
+                    onClick  = {
+                        scope.launch { drawerState.close() }
+                        onOpenSettings()
                     },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
@@ -309,14 +278,14 @@ fun TodoListScreen(
                     )
                 } else {
                 TopAppBar(
-                    title  = { Text(stringResource(R.string.app_name)) },
+                    title  = { Text(filterState.project ?: stringResource(R.string.app_name)) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor    = MaterialTheme.colorScheme.primaryContainer,
                         titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Filled.Menu, contentDescription = "Open filters")
+                            Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
                         }
                     },
                     actions = {
@@ -330,52 +299,25 @@ fun TodoListScreen(
                         }) {
                             Icon(Icons.Filled.Search, contentDescription = "Search")
                         }
-                        // Filter
-                        IconButton(onClick = { showFilterPanel = !showFilterPanel }) {
-                            Icon(
-                                if (filterState.priority != null || filterState.showCompleted || filterState.showOverdue)
-                                    Icons.Outlined.FilterAlt else Icons.Filled.FilterList,
-                                contentDescription = "Filter"
-                            )
-                        }
-                        // Refresh / Pull
-                        IconButton(
-                            onClick  = { viewModel.syncFromRemote() },
-                            enabled  = syncState !is SyncState.Syncing
-                        ) {
-                            if (syncState is SyncState.Syncing) {
-                                CircularProgressIndicator(modifier = Modifier.padding(8.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Filled.Refresh, contentDescription = "Sync from remote")
-                            }
-                        }
-                        // Sort menu
+                        // Overflow menu
                         Box {
-                            IconButton(onClick = { showSortMenu = true }) {
+                            IconButton(onClick = { showOverflowMenu = true }) {
                                 Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                             }
                             DropdownMenu(
-                                expanded        = showSortMenu,
-                                onDismissRequest = { showSortMenu = false }
+                                expanded         = showOverflowMenu,
+                                onDismissRequest = { showOverflowMenu = false }
                             ) {
-                                Text(
-                                    "Sort by",
-                                    style    = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                                )
-                                SortOrder.entries.forEach { order ->
-                                    DropdownMenuItem(
-                                        text    = { Text(order.label) },
-                                        onClick = {
-                                            viewModel.setSortOrder(order)
-                                            showSortMenu = false
-                                        }
-                                    )
-                                }
                                 DropdownMenuItem(
-                                    text    = { Text("Settings") },
+                                    text        = { Text("Sync now") },
+                                    leadingIcon = { Icon(Icons.Filled.Refresh, null) },
+                                    enabled     = syncState !is SyncState.Syncing,
+                                    onClick     = { showOverflowMenu = false; viewModel.syncFromRemote() }
+                                )
+                                DropdownMenuItem(
+                                    text        = { Text("Settings") },
                                     leadingIcon = { Icon(Icons.Filled.Settings, null) },
-                                    onClick = { showSortMenu = false; onOpenSettings() }
+                                    onClick     = { showOverflowMenu = false; onOpenSettings() }
                                 )
                             }
                         }
@@ -398,36 +340,18 @@ fun TodoListScreen(
                     ) {}
                 }
 
-                // Filter chips
-                AnimatedVisibility(visible = showFilterPanel) {
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = filterState.showCompleted,
-                                onClick  = { viewModel.setFilterCompleted(!filterState.showCompleted) },
-                                label    = { Text("Show done") },
-                                leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) }
-                            )
-                            FilterChip(
-                                selected = filterState.showOverdue,
-                                onClick  = { viewModel.setFilterOverdue(!filterState.showOverdue) },
-                                label    = { Text("Overdue") }
-                            )
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Priority.entries.forEach { p ->
-                                FilterChip(
-                                    selected = filterState.priority == p,
-                                    onClick  = {
-                                        viewModel.setFilterPriority(
-                                            if (filterState.priority == p) null else p
-                                        )
-                                    },
-                                    label    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) }
-                                )
-                            }
-                        }
-                    }
+                // Filter + sort chips (single home for list filters)
+                if (!isSelecting) {
+                    FilterChipRow(
+                        filterState     = filterState,
+                        onSortOrder     = viewModel::setSortOrder,
+                        onToggleOverdue = { viewModel.setFilterOverdue(!filterState.showOverdue) },
+                        onPriority      = { p ->
+                            viewModel.setFilterPriority(if (filterState.priority == p) null else p)
+                        },
+                        onToggleDone    = { viewModel.setFilterCompleted(!filterState.showCompleted) },
+                        onClear         = viewModel::clearChipFilters
+                    )
                 }
             }
         },
@@ -492,31 +416,41 @@ fun TodoListScreen(
                                     key         = { it.id },
                                     contentType = { "todo_card" }
                                 ) { todo ->
-                                    TodoItemCard(
-                                        todo             = todo,
-                                        onToggleComplete = { if (!isSelecting) viewModel.toggleComplete(it) },
-                                        onClick          = { t ->
-                                            if (isSelecting) {
-                                                viewModel.toggleSelection(t.id)
-                                            } else {
-                                                onEditTodo(t)
+                                    SwipeableTodoRow(
+                                        todo       = todo,
+                                        enabled    = !isSelecting,
+                                        onComplete = { viewModel.toggleComplete(todo) },
+                                        onTrash    = {
+                                            viewModel.trashTodo(todo)
+                                            scope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message     = "Moved to trash",
+                                                    actionLabel = "Undo",
+                                                    duration    = SnackbarDuration.Short
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) viewModel.undoTrash()
                                             }
                                         },
-                                        onLongClick      = { target ->
-                                            if (isSelecting) {
-                                                // Already in selection mode — treat as toggle
-                                                viewModel.toggleSelection(target.id)
-                                            } else {
-                                                // Enter selection mode with this item selected
-                                                viewModel.toggleSelection(target.id)
-                                            }
-                                        },
-                                        isSelected       = todo.id in selectedIds,
-                                        onSelectionToggle = if (isSelecting) {
-                                            { viewModel.toggleSelection(todo.id) }
-                                        } else null,
-                                        modifier         = Modifier.animateItem()
-                                    )
+                                        modifier   = Modifier.animateItem()
+                                    ) {
+                                        TodoItemCard(
+                                            todo             = todo,
+                                            onToggleComplete = { if (!isSelecting) viewModel.toggleComplete(it) },
+                                            onClick          = { t ->
+                                                if (isSelecting) {
+                                                    viewModel.toggleSelection(t.id)
+                                                } else {
+                                                    onEditTodo(t)
+                                                }
+                                            },
+                                            // Long-press enters selection mode, or toggles when already selecting
+                                            onLongClick      = { target -> viewModel.toggleSelection(target.id) },
+                                            isSelected       = todo.id in selectedIds,
+                                            onSelectionToggle = if (isSelecting) {
+                                                { viewModel.toggleSelection(todo.id) }
+                                            } else null
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -558,5 +492,161 @@ fun TodoListScreen(
                 scope.launch { snackbarHostState.showSnackbar("Conflict unresolved — sync pending") }
             }
         )
+    }
+}
+
+/**
+ * Always-visible, horizontally scrolling row of list controls: sort, overdue,
+ * priority, show-done, and a clear action when any chip filter is active.
+ * Project filtering lives in the navigation drawer.
+ */
+@Composable
+private fun FilterChipRow(
+    filterState: FilterState,
+    onSortOrder: (SortOrder) -> Unit,
+    onToggleOverdue: () -> Unit,
+    onPriority: (Priority) -> Unit,
+    onToggleDone: () -> Unit,
+    onClear: () -> Unit
+) {
+    var showSortMenu by remember { mutableStateOf(false) }
+    val hasChipFilters = filterState.priority != null || filterState.showCompleted || filterState.showOverdue
+
+    Row(
+        modifier              = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box {
+            AssistChip(
+                onClick      = { showSortMenu = true },
+                label        = { Text(filterState.sortOrder.label) },
+                leadingIcon  = { Icon(Icons.Filled.SwapVert, contentDescription = null) },
+                trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = "Change sort order") }
+            )
+            DropdownMenu(
+                expanded         = showSortMenu,
+                onDismissRequest = { showSortMenu = false }
+            ) {
+                SortOrder.entries.forEach { order ->
+                    DropdownMenuItem(
+                        text         = { Text(order.label) },
+                        trailingIcon = if (order == filterState.sortOrder) {
+                            { Icon(Icons.Filled.Check, contentDescription = "Selected") }
+                        } else null,
+                        onClick      = {
+                            onSortOrder(order)
+                            showSortMenu = false
+                        }
+                    )
+                }
+            }
+        }
+        FilterChip(
+            selected = filterState.showOverdue,
+            onClick  = onToggleOverdue,
+            label    = { Text("Overdue") }
+        )
+        // Most important first
+        Priority.entries.sortedByDescending { it.sortOrder }.forEach { p ->
+            FilterChip(
+                selected = filterState.priority == p,
+                onClick  = { onPriority(p) },
+                label    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) }
+            )
+        }
+        FilterChip(
+            selected    = filterState.showCompleted,
+            onClick     = onToggleDone,
+            label       = { Text("Show done") },
+            leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) }
+        )
+        if (hasChipFilters) {
+            AssistChip(
+                onClick     = onClear,
+                label       = { Text("Clear") },
+                leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) }
+            )
+        }
+    }
+}
+
+/**
+ * Wraps a list row with swipe gestures: swipe right toggles completion,
+ * swipe left moves the task to trash. Disabled during multi-select.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableTodoRow(
+    todo: TodoItem,
+    enabled: Boolean,
+    onComplete: () -> Unit,
+    onTrash: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                // Snap back; the reloaded list decides whether the row stays visible.
+                SwipeToDismissBoxValue.StartToEnd -> { onComplete(); false }
+                // Row is removed optimistically by the ViewModel.
+                SwipeToDismissBoxValue.EndToStart -> { onTrash(); true }
+                else -> false
+            }
+        },
+        positionalThreshold = { it * 0.4f }
+    )
+
+    SwipeToDismissBox(
+        state                      = dismissState,
+        modifier                   = modifier,
+        enableDismissFromStartToEnd = enabled,
+        enableDismissFromEndToStart = enabled,
+        backgroundContent          = {
+            val direction = dismissState.dismissDirection
+            val color = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primaryContainer
+                SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.errorContainer
+                else                              -> Color.Transparent
+            }
+            Box(
+                modifier         = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(color)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = if (direction == SwipeToDismissBoxValue.EndToStart)
+                    Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                when (direction) {
+                    SwipeToDismissBoxValue.StartToEnd -> Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(if (todo.isCompleted) "Reopen" else "Complete",
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            style = MaterialTheme.typography.labelMedium)
+                    }
+                    SwipeToDismissBoxValue.EndToStart -> Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("Trash",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.labelMedium)
+                        Icon(Icons.Filled.Delete, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer)
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    ) {
+        content()
     }
 }
