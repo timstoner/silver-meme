@@ -24,10 +24,8 @@ class NotificationScheduler(context: Context) {
      * No-ops if: due date is null, due date is in the past, or POST_NOTIFICATIONS
      * permission is not granted (Android 13+).
      *
-     * The actual runtime permission request is performed in TodoDetailScreen
-     * (owned by the UI agent) when the user sets a due date. Call
-     * [hasNotificationPermission] from the UI before scheduling to decide
-     * whether to show the permission rationale dialog.
+     * The runtime permission request is made by MainActivity on launch; once
+     * granted it calls [rescheduleAll] so tasks saved before the grant get reminders.
      */
     fun schedule(todo: TodoItem) {
         val dueDate = todo.dueDate ?: return
@@ -44,6 +42,11 @@ class NotificationScheduler(context: Context) {
             .addTag(todo.id)
             .build()
         workManager.enqueue(request)
+    }
+
+    /** Schedules reminders for every open task with a due date (boot restore, permission grant). */
+    fun rescheduleAll(todos: List<TodoItem>) {
+        todos.filter { !it.isCompleted && it.dueDate != null }.forEach { schedule(it) }
     }
 
     fun cancel(todoId: String) {
@@ -64,8 +67,7 @@ class NotificationScheduler(context: Context) {
         /**
          * Returns true if the app has permission to post notifications.
          * Always returns true on Android < 13 (TIRAMISU) where no runtime
-         * permission is required. Expose as a static helper so the UI layer
-         * (TodoDetailScreen) can check before launching the permission request.
+         * permission is required.
          */
         fun hasNotificationPermission(context: Context): Boolean {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
