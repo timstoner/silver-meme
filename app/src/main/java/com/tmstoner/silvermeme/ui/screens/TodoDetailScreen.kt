@@ -1,6 +1,10 @@
 package com.tmstoner.silvermeme.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,8 +21,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Schedule
@@ -30,6 +37,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -37,6 +45,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -51,6 +62,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tmstoner.silvermeme.data.model.LevelOfEffort
@@ -71,7 +84,8 @@ private val DATE_DISPLAY = DateTimeFormatter.ofPattern("MMM d, yyyy")
 /**
  * Screen for creating a new TODO item or editing an existing one.
  *
- * Always visible: Title, Priority, Due date, Notes.
+ * Always visible: Title, Priority (segmented), Due date (quick chips), Notes.
+ * When editing, the top bar also offers Mark done/Reopen and Move to trash.
  * Behind the "Show more options" toggle (auto-expanded when editing a task that
  * already uses them): Level of Effort, Project/folder, Location, Tags, Schedule.
  */
@@ -82,7 +96,6 @@ fun TodoDetailScreen(
     existingTodo: TodoItem? = null,
     onBack: () -> Unit
 ) {
-    val uiState           by viewModel.uiState.collectAsStateWithLifecycle()
     val availableProjects by viewModel.availableProjects.collectAsStateWithLifecycle()
     val isEditing = existingTodo != null
 
@@ -125,17 +138,9 @@ fun TodoDetailScreen(
 
     // Transient dialog state — no need to survive rotation
     var showDatePicker     by remember { mutableStateOf(false) }
-    var showPriorityMenu   by remember { mutableStateOf(false) }
     var showScheduleDialog by remember { mutableStateOf(false) }
     var showLoeMenu        by remember { mutableStateOf(false) }
     var showProjectMenu    by remember { mutableStateOf(false) }
-
-    // Navigate back after a successful save
-    LaunchedEffect(uiState.isSaving) {
-        if (!uiState.isSaving && isEditing) {
-            // Don't auto-navigate for new todos to allow multi-step input
-        }
-    }
 
     fun buildTodo(): TodoItem {
         val cleanedProject = project.trim()
@@ -179,6 +184,15 @@ fun TodoDetailScreen(
                   recurrenceString != (existingTodo?.recurrence ?: "none")
 
     var showDiscardDialog by remember { mutableStateOf(false) }
+    var showTrashDialog   by remember { mutableStateOf(false) }
+
+    fun addTag() {
+        val cleaned = tagInput.trim().trimEnd(',').trim().lowercase().replace(' ', '-')
+        if (cleaned.isNotEmpty() && !tags.contains(cleaned)) {
+            tagsString = (tags + cleaned).joinToString(",")
+        }
+        tagInput = ""
+    }
 
     // Fix 5: intercept system back if there are unsaved changes
     BackHandler(enabled = isDirty) {
@@ -197,6 +211,24 @@ fun TodoDetailScreen(
                     // Fix 5: guard nav icon as well
                     IconButton(onClick = { if (isDirty) showDiscardDialog = true else onBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (existingTodo != null) {
+                        // Acts on the saved task (so recurrence/rename handling stays in
+                        // the ViewModel); save or discard pending edits first.
+                        IconButton(
+                            onClick  = { viewModel.toggleComplete(existingTodo); onBack() },
+                            enabled  = !isDirty
+                        ) {
+                            Icon(
+                                Icons.Filled.CheckCircle,
+                                contentDescription = if (existingTodo.isCompleted) "Reopen task" else "Mark done"
+                            )
+                        }
+                        IconButton(onClick = { showTrashDialog = true }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Move to trash")
+                        }
                     }
                 }
             )
@@ -228,52 +260,73 @@ fun TodoDetailScreen(
                 modifier      = Modifier.fillMaxWidth()
             )
 
-            // -- Priority
-            ExposedDropdownMenuBox(
-                expanded        = showPriorityMenu,
-                onExpandedChange = { expanded -> showPriorityMenu = expanded }
-            ) {
-                OutlinedTextField(
-                    value           = priority.label.replaceFirstChar { c -> c.uppercaseChar() },
-                    onValueChange   = {},
-                    readOnly        = true,
-                    label           = { Text("Priority") },
-                    trailingIcon    = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showPriorityMenu) },
-                    modifier        = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor()
-                )
-                ExposedDropdownMenu(
-                    expanded        = showPriorityMenu,
-                    onDismissRequest = { showPriorityMenu = false }
-                ) {
-                    Priority.entries.forEach { p ->
-                        DropdownMenuItem(
-                            text    = { Text(p.label.replaceFirstChar { c -> c.uppercaseChar() }) },
-                            onClick = { priority = p; showPriorityMenu = false }
-                        )
+            // -- Priority (one tap)
+            Column {
+                Text("Priority", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(4.dp))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    Priority.entries.forEachIndexed { index, p ->
+                        SegmentedButton(
+                            selected = priority == p,
+                            onClick  = { priority = p },
+                            shape    = SegmentedButtonDefaults.itemShape(index, Priority.entries.size),
+                            icon     = {}
+                        ) {
+                            Text(
+                                p.label.replaceFirstChar { c -> c.uppercaseChar() },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
 
-            // -- Due date
-            OutlinedTextField(
-                value         = dueDate?.format(DATE_DISPLAY) ?: "",
-                onValueChange = {},
-                readOnly      = true,
-                label         = { Text("Due date") },
-                trailingIcon  = {
-                    Row {
-                        if (dueDate != null) {
+            // -- Due date (whole field opens the picker; chips for common choices)
+            val dateFieldInteraction = remember { MutableInteractionSource() }
+            LaunchedEffect(dateFieldInteraction) {
+                dateFieldInteraction.interactions.collect { interaction ->
+                    if (interaction is PressInteraction.Release) showDatePicker = true
+                }
+            }
+            Column {
+                OutlinedTextField(
+                    value             = dueDate?.format(DATE_DISPLAY) ?: "",
+                    onValueChange     = {},
+                    readOnly          = true,
+                    label             = { Text("Due date") },
+                    placeholder       = { Text("None") },
+                    leadingIcon       = { Icon(Icons.Filled.Event, contentDescription = null) },
+                    trailingIcon      = if (dueDate != null) {
+                        {
                             IconButton(onClick = { dueDate = null }) {
                                 Icon(Icons.Filled.Close, contentDescription = "Clear date")
                             }
                         }
-                        TextButton(onClick = { showDatePicker = true }) { Text("Pick") }
+                    } else null,
+                    interactionSource = dateFieldInteraction,
+                    modifier          = Modifier.fillMaxWidth()
+                )
+                val today = LocalDate.now()
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        "Today"     to today,
+                        "Tomorrow"  to today.plusDays(1),
+                        "Next week" to today.plusWeeks(1)
+                    ).forEach { (label, date) ->
+                        FilterChip(
+                            selected = dueDate == date,
+                            onClick  = { dueDate = if (dueDate == date) null else date },
+                            label    = { Text(label) }
+                        )
                     }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+                    FilterChip(
+                        selected = false,
+                        onClick  = { showDatePicker = true },
+                        label    = { Text("Pick…") }
+                    )
+                }
+            }
 
             // -- Notes (markdown body)
             OutlinedTextField(
@@ -409,21 +462,18 @@ fun TodoDetailScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedTextField(
-                            value         = tagInput,
-                            onValueChange = { newVal -> tagInput = newVal },
-                            label         = { Text("Add tag") },
-                            singleLine    = true,
-                            modifier      = Modifier.weight(1f)
+                            value           = tagInput,
+                            onValueChange   = { newVal ->
+                                tagInput = newVal
+                                if (newVal.endsWith(",")) addTag()
+                            },
+                            label           = { Text("Add tag") },
+                            singleLine      = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { addTag() }),
+                            modifier        = Modifier.weight(1f)
                         )
-                        IconButton(
-                            onClick = {
-                                val cleaned = tagInput.trim().lowercase().replace(' ', '-')
-                                if (cleaned.isNotEmpty() && !tags.contains(cleaned)) {
-                                    tagsString = (tags + cleaned).joinToString(",")
-                                }
-                                tagInput = ""
-                            }
-                        ) {
+                        IconButton(onClick = ::addTag) {
                             Icon(Icons.Filled.Add, contentDescription = "Add tag")
                         }
                     }
@@ -445,6 +495,25 @@ fun TodoDetailScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDiscardDialog = false }) { Text("Keep editing") }
+            }
+        )
+    }
+
+    // -- Move-to-trash confirmation (soft delete; restorable from the Trash screen)
+    if (showTrashDialog && existingTodo != null) {
+        AlertDialog(
+            onDismissRequest = { showTrashDialog = false },
+            title   = { Text("Move to trash?") },
+            text    = { Text("You can restore it from Trash for 30 days.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTrashDialog = false
+                    viewModel.trashTodo(existingTodo)
+                    onBack()
+                }) { Text("Move to trash", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTrashDialog = false }) { Text("Cancel") }
             }
         )
     }
