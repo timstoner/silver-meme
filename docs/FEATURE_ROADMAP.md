@@ -1,6 +1,6 @@
 # SilverMeme — Feature Roadmap & Delegation Plan
 
-> **Status (2026-10-07):** Everything except G1 (background sync) is done.
+> **Status (2026-10-07):** Tracks A–H are done, including G1 (background sync).
 > Remaining and newly identified work is in **Next tracks** near the end of
 > this document — start there. The original track write-ups below are kept
 > as the spec/history for completed work.
@@ -288,7 +288,8 @@ _Last reviewed 2026-10-06 against the code on `main`._
 - [x] E2 — Recurring tasks (`RecurrenceRule`, `RecurrenceDialog`, next occurrence spawned on complete)
 - [x] E3 — Projects / folders (recursive scan, project picker, project list in the drawer)
 - [x] F — Bulk actions (`81dfd26`; `bulkSave`/`bulkTrash` sync once per batch)
-- [ ] G1 — Background periodic sync
+- [x] G1 — Background periodic sync (Settings → Background sync, off by default; hourly WorkManager job
+      on a network connection; active vault only; conflicts wait for the next manual sync).
 - [x] G2 — Multi-vault support (`92b4c9b`; Settings → Vaults; per-vault folder/remote/user/PAT; the existing
       setup migrates to "Default"; switcher in the drawer / tablet pane once there are 2+ vaults).
       Known gaps: reminders from the previous vault keep firing after a switch; adding a task to a new
@@ -356,8 +357,8 @@ parallelism. H1 and H2 both touch `TodoListScreen.kt`/`TabletTodoLayout.kt`
   plugin deprecation warning; CI still green.
 
 ### Still open from the original plan
-- G1 — Background periodic sync. Now touches the same settings and sync code as G2 (multi-vault):
-  a background sync should sync the active vault (or every vault — decide first).
+- None. G1 (background sync) was done after G2 and syncs the active vault only (decided 2026-10-07).
+  Syncing every vault would need per-vault pull/push in `TodoRepository`.
 
 ### Progress
 - [x] H1 — Tablet parity for the list screen (shared `FilterChipRow` and `TodoGroupList` in `ui/components/`)

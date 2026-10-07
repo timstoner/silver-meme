@@ -3,6 +3,7 @@ package com.tmstoner.silvermeme.data.storage
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -55,6 +56,7 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
         private val KEY_THEME_MODE        = stringPreferencesKey("theme_mode")
         private val KEY_LAST_FILTER_STATE = stringPreferencesKey("last_filter_state")
         private val KEY_DAILY_CAPACITY    = intPreferencesKey("daily_capacity")
+        private val KEY_BACKGROUND_SYNC   = booleanPreferencesKey("background_sync")
 
         // EncryptedSharedPreferences key for the PAT
         private const val ENCRYPTED_PREFS_FILE = "secure_settings"
@@ -214,6 +216,9 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
     override val dailyCapacity: Flow<Int> = context.dataStore.data
         .map { it[KEY_DAILY_CAPACITY] ?: SettingsStore.DEFAULT_DAILY_CAPACITY }
 
+    override val backgroundSync: Flow<Boolean> = context.dataStore.data
+        .map { it[KEY_BACKGROUND_SYNC] ?: false }
+
     // ── Writes ────────────────────────────────────────────────────────────────
 
     override suspend fun setGitRemoteUrl(url: String) {
@@ -259,6 +264,10 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
 
     override suspend fun setDailyCapacity(points: Int) {
         context.dataStore.edit { it[KEY_DAILY_CAPACITY] = points }
+    }
+
+    override suspend fun setBackgroundSync(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_BACKGROUND_SYNC] = enabled }
     }
 
     /** Returns a snapshot of all settings (non-reactive, for one-shot reads). */

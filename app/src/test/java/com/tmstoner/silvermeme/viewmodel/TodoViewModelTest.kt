@@ -361,4 +361,7 @@ private class FakeSettingsStore(capacity: Int) : SettingsStore {
     override suspend fun setThemeMode(mode: String) = Unit
     override suspend fun setLastFilterState(serialized: String) = Unit
     override suspend fun setDailyCapacity(points: Int) { capacityFlow.value = points }
+    private val backgroundSyncFlow = MutableStateFlow(false)
+    override val backgroundSync: Flow<Boolean> = backgroundSyncFlow
+    override suspend fun setBackgroundSync(enabled: Boolean) { backgroundSyncFlow.value = enabled }
 }
