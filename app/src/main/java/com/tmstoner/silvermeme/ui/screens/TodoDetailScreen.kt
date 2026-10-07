@@ -63,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,6 +77,7 @@ import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
 import com.tmstoner.silvermeme.ui.components.ChecklistEditor
 import com.tmstoner.silvermeme.ui.components.ChecklistSaver
 import com.tmstoner.silvermeme.ui.components.RecurrenceDialog
+import com.tmstoner.silvermeme.ui.components.WikiLinkNotesField
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -88,7 +90,8 @@ private val DATE_DISPLAY = DateTimeFormatter.ofPattern("MMM d, yyyy")
 /**
  * Screen for creating a new TODO item or editing an existing one.
  *
- * Always visible: Title, Priority (segmented), Due date (quick chips), Notes, Checklist.
+ * Always visible: Title, Priority (segmented), Due date (quick chips), Notes (with
+ * `[[` wikilink suggestions), Checklist.
  * When editing, the top bar also offers Mark done/Reopen and Move to trash.
  * Behind the "Show more options" toggle (auto-expanded when editing a task that
  * already uses them): Level of Effort, Project/folder, Location, Tags, Schedule.
@@ -101,12 +104,18 @@ fun TodoDetailScreen(
     onBack: () -> Unit
 ) {
     val availableProjects by viewModel.availableProjects.collectAsStateWithLifecycle()
+    val noteIndex         by viewModel.noteIndex.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.loadNoteIndex() }
     val isEditing = existingTodo != null
 
     // Fix 4: rememberSaveable for all form fields, keyed on existingTodo?.id
     // so that editing a different task resets the form.
     var title    by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.title   ?: "") }
-    var notes    by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.content ?: "") }
+    // TextFieldValue (text + cursor) so `[[` autocomplete knows where the user is typing.
+    var notesValue by rememberSaveable(existingTodo?.id, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(existingTodo?.content ?: ""))
+    }
+    val notes = notesValue.text
     var dueDate  by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.dueDate) }
     var priority by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.priority ?: Priority.MEDIUM) }
     var location by rememberSaveable(existingTodo?.id) { mutableStateOf(existingTodo?.location ?: "") }
@@ -336,13 +345,11 @@ fun TodoDetailScreen(
                 }
             }
 
-            // -- Notes (markdown body)
-            OutlinedTextField(
-                value         = notes,
-                onValueChange = { newVal -> notes = newVal },
-                label         = { Text("Notes (Markdown)") },
-                minLines      = 4,
-                modifier      = Modifier.fillMaxWidth()
+            // -- Notes (markdown body, with [[wikilink]] suggestions and links)
+            WikiLinkNotesField(
+                value         = notesValue,
+                onValueChange = { notesValue = it },
+                noteIndex     = noteIndex
             )
 
             // -- Checklist (saved as `- [ ]` / `- [x]` lines in the markdown body)

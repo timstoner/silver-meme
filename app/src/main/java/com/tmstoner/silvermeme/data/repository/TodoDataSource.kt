@@ -1,5 +1,6 @@
 package com.tmstoner.silvermeme.data.repository
 
+import com.tmstoner.silvermeme.data.model.NoteIndex
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
 import java.time.LocalDate
@@ -25,5 +26,7 @@ interface TodoDataSource {
     /** Moves multiple todos to trash in a single batch and syncs once at the end. */
     suspend fun bulkTrash(todos: List<TodoItem>)
     suspend fun pull(): GitRepository.GitResult
+    /** Vault name and note names for wikilink suggestions (Track G5). Read-only; never syncs. */
+    suspend fun getNoteIndex(): NoteIndex = NoteIndex.EMPTY
     suspend fun push(message: String = "Update todos"): GitRepository.GitResult
 }

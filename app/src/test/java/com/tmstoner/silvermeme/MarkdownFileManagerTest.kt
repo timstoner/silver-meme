@@ -202,6 +202,34 @@ class MarkdownFileManagerTest {
         assertTrue(!file.exists())
     }
 
+    // ── Wikilinks (Track G5) ──────────────────────────────────────────────────
+
+    @Test
+    fun `listNoteNames covers the whole vault and skips hidden folders`() {
+        manager.saveTodo(sampleTodo())                                   // Tasks/Buy groceries.md
+        manager.trashTodo(manager.saveTodo(sampleTodo().copy(id = "t2", title = "Old task")))
+        fun note(path: String) = java.io.File(tempFolder.root, path).apply {
+            parentFile?.mkdirs(); writeText("# note")
+        }
+        note("Meeting notes.md")
+        note("Projects/Roadmap.md")
+        note("Projects/meeting NOTES.md")                                // same name, other case
+        note(".obsidian/workspace.md")
+        note("Attachments/diagram.png")
+
+        assertEquals(
+            listOf("Buy groceries", "Meeting notes", "Roadmap"),
+            manager.listNoteNames()
+        )
+    }
+
+    @Test
+    fun `wikilinks in notes survive a save and reload`() {
+        val notes = "Prep for [[Meeting notes]] and [[Roadmap#Q4|the roadmap]]."
+        manager.saveTodo(sampleTodo().copy(content = notes))
+        assertEquals(notes, manager.getAllTodos().single().content)
+    }
+
     // ── Trash ─────────────────────────────────────────────────────────────────
 
     @Test
