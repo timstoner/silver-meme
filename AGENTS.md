@@ -34,9 +34,9 @@ Guidance for AI coding agents working in this repository (SilverMeme — an Andr
 
 ## Developer workflows
 
-- **Build**: standard Gradle Android project (Kotlin DSL). Gradle 9.6.1 (wrapper), AGP 9.3.1, Kotlin 2.4.10, compileSdk 35, targetSdk 35, minSdk 26, bytecode target Java 17. Compose is enabled via the `org.jetbrains.kotlin.plugin.compose` plugin (not the old `composeOptions.kotlinCompilerExtensionVersion`). WorkManager 2.10.0 for scheduled notifications.
+- **Build**: standard Gradle Android project (Kotlin DSL). Gradle 9.6.1 (wrapper), AGP 9.3.1, Kotlin 2.4.10, compileSdk 35, targetSdk 35, minSdk 26, bytecode target Java 17. Kotlin is AGP 9's built-in Kotlin support — there is no `org.jetbrains.kotlin.android` plugin, so don't add it back. Compose is enabled via the `org.jetbrains.kotlin.plugin.compose` plugin (not the old `composeOptions.kotlinCompilerExtensionVersion`); its version in the root `build.gradle.kts` also sets the Kotlin version. WorkManager 2.10.0 for scheduled notifications.
   - The Gradle daemon runs on a JetBrains JDK 21 toolchain (`gradle/gradle-daemon-jvm.properties`), auto-provisioned through the foojay resolver. Don't hand-edit that file; regenerate it with `./gradlew updateDaemonJvm --jvm-version=21 --jvm-vendor=jetbrains`.
-  - The build prints a known warning about the deprecated `org.jetbrains.kotlin.android` plugin (AGP 9 has built-in Kotlin support). Migrating off it is tracked in the roadmap; it doesn't affect the build.
+  - `gradle.properties` still opts out of several AGP 9 defaults (`android.newDsl=false`, `android.r8.optimizedResourceShrinking=false`, …), so the build prints "option setting … is deprecated" warnings. They're harmless until AGP 10, which removes those options.
 - **Run unit tests**: `./gradlew :app:test` — the primary automated check. Tests live in `app/src/test/...`:
   - `MarkdownFileManagerTest` (+ `RoundTripAssertions`) — frontmatter, checklist, projects, trash.
   - `TodoViewModelTest` — filtering, sync state, recurrence, trash/undo, against a fake `TodoDataSource`.
