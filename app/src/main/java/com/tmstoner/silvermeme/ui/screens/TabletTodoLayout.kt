@@ -67,6 +67,7 @@ import com.tmstoner.silvermeme.ui.components.ConflictResolutionDialog
 import com.tmstoner.silvermeme.ui.components.FilterChipRow
 import com.tmstoner.silvermeme.ui.components.QuickAddBar
 import com.tmstoner.silvermeme.ui.components.TodoGroupList
+import com.tmstoner.silvermeme.ui.components.VaultSwitcher
 import com.tmstoner.silvermeme.ui.components.showTrashedWithUndo
 import com.tmstoner.silvermeme.viewmodel.SyncState
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
@@ -92,6 +93,8 @@ fun TabletTodoLayout(
     val syncState         by viewModel.syncState.collectAsStateWithLifecycle()
     val groups            by viewModel.visibleGroups.collectAsStateWithLifecycle()
     val availableProjects by viewModel.availableProjects.collectAsStateWithLifecycle()
+    val vaults            by viewModel.vaults.collectAsStateWithLifecycle()
+    val activeVaultId     by viewModel.activeVaultId.collectAsStateWithLifecycle()
     val selectedIds       by viewModel.selectedIds.collectAsStateWithLifecycle()
     val dailyCapacity     by viewModel.dailyCapacity.collectAsStateWithLifecycle()
     val selectedTodoId    by viewModel.selectedTodoId.collectAsStateWithLifecycle()
@@ -327,6 +330,12 @@ fun TabletTodoLayout(
                                 .verticalScroll(rememberScrollState())
                                 .padding(vertical = 8.dp)
                         ) {
+                            // Only shown with 2+ vaults (G2)
+                            VaultSwitcher(
+                                vaults        = vaults,
+                                activeVaultId = activeVaultId,
+                                onSwitch      = viewModel::switchVault
+                            )
                             NavigationDrawerItem(
                                 label    = { Text("All tasks") },
                                 icon     = { Icon(Icons.Filled.Folder, contentDescription = null) },

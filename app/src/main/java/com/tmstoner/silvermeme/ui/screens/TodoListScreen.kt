@@ -60,6 +60,7 @@ import com.tmstoner.silvermeme.ui.components.ConflictResolutionDialog
 import com.tmstoner.silvermeme.ui.components.FilterChipRow
 import com.tmstoner.silvermeme.ui.components.QuickAddBar
 import com.tmstoner.silvermeme.ui.components.TodoGroupList
+import com.tmstoner.silvermeme.ui.components.VaultSwitcher
 import com.tmstoner.silvermeme.ui.components.showTrashedWithUndo
 import com.tmstoner.silvermeme.viewmodel.SyncState
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
@@ -84,6 +85,8 @@ fun TodoListScreen(
     val syncState         by viewModel.syncState.collectAsStateWithLifecycle()
     val groups            by viewModel.visibleGroups.collectAsStateWithLifecycle()
     val availableProjects by viewModel.availableProjects.collectAsStateWithLifecycle()
+    val vaults            by viewModel.vaults.collectAsStateWithLifecycle()
+    val activeVaultId     by viewModel.activeVaultId.collectAsStateWithLifecycle()
     val selectedIds       by viewModel.selectedIds.collectAsStateWithLifecycle()
     val dailyCapacity     by viewModel.dailyCapacity.collectAsStateWithLifecycle()
 
@@ -141,6 +144,15 @@ fun TodoListScreen(
                     stringResource(R.string.app_name),
                     style    = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(16.dp)
+                )
+                // Only shown with 2+ vaults (G2)
+                VaultSwitcher(
+                    vaults        = vaults,
+                    activeVaultId = activeVaultId,
+                    onSwitch      = { id ->
+                        viewModel.switchVault(id)
+                        scope.launch { drawerState.close() }
+                    }
                 )
                 NavigationDrawerItem(
                     label    = { Text("All tasks") },

@@ -30,6 +30,7 @@ import com.tmstoner.silvermeme.widgets.TodoWidgetDeepLinks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -58,6 +59,16 @@ class MainActivity : ComponentActivity() {
         // Initialize sample data on first launch if vault is empty
         lifecycleScope.launch {
             app.todoRepository.initializeSampleDataIfNeeded()
+        }
+
+        // Multi-vault (G2): reminders and widgets follow the active vault. Vaults are
+        // only switched from this activity's UI, so it is always alive when that happens.
+        // Reminders already scheduled for the previous vault's tasks keep firing.
+        lifecycleScope.launch(Dispatchers.IO) {
+            app.settingsDataStore.activeVaultId.drop(1).collect {
+                runCatching { app.notificationScheduler.rescheduleAll(app.todoRepository.getTodos()) }
+                TodoWidgetDeepLinks.refreshWidgets(applicationContext)
+            }
         }
 
         // Ask once per launch (not on rotation). Android stops showing the dialog
