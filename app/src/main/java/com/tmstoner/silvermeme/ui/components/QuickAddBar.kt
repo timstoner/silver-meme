@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tmstoner.silvermeme.util.QuickAddParser
 import java.time.LocalDate
@@ -52,7 +53,10 @@ fun QuickAddBar(
             OutlinedTextField(
                 value           = text,
                 onValueChange   = { text = it },
-                placeholder     = { Text("Quick add: Buy milk tomorrow !high #errand") },
+                // Short enough for the narrow tablet list pane; the preview line explains the rest.
+                placeholder     = {
+                    Text("Quick add, e.g. milk tmr !high", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
                 singleLine      = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { submit() }),
@@ -75,7 +79,7 @@ fun QuickAddBar(
     }
 }
 
-/** e.g. "Due Wed, Oct 7 · High · #errand", or null when nothing beyond the title was parsed. */
+/** e.g. "Due Wed, Oct 7 · High · 3 pts · #errand", or null when nothing beyond the title was parsed. */
 private fun previewText(parsed: QuickAddParser.Result): String? {
     val today = LocalDate.now()
     val parts = buildList {
@@ -89,6 +93,7 @@ private fun previewText(parsed: QuickAddParser.Result): String? {
             )
         }
         parsed.priority?.let { add(it.label.replaceFirstChar { c -> c.uppercaseChar() }) }
+        if (parsed.loe > 0) add("${parsed.loe} pts")
         parsed.tags.forEach { add("#$it") }
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")

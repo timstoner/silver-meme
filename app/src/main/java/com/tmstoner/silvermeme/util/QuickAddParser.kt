@@ -1,5 +1,6 @@
 package com.tmstoner.silvermeme.util
 
+import com.tmstoner.silvermeme.data.model.LevelOfEffort
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
@@ -12,11 +13,12 @@ import java.util.UUID
 
 /**
  * Parses a one-line quick-add string such as `Buy milk tomorrow !high #errand`
- * into a title plus optional due date, priority and tags.
+ * into a title plus optional due date, priority, effort and tags.
  *
  * Recognised tokens (case-insensitive, removed from the title):
  *  - `#tag`                                  → tag (lowercased)
  *  - `!low` `!med` `!medium` `!high` `!urgent` → priority
+ *  - `~1` `~2` `~3` `~5` `~8` `~13`         → level of effort ([LevelOfEffort])
  *  - `today`, `tomorrow`/`tmr`, `next week`, a full weekday name (`friday`)
  *    or a safe abbreviation (`tue`, `thu`, `fri`), or an ISO date
  *    (`2026-10-12`)                          → due date; the last one wins
@@ -30,7 +32,9 @@ object QuickAddParser {
         val title: String,
         val dueDate: LocalDate? = null,
         val priority: Priority? = null,
-        val tags: List<String> = emptyList()
+        val tags: List<String> = emptyList(),
+        /** Level of effort in points; 0 when not given. */
+        val loe: Int = 0
     ) {
         /** True when the input produced a usable title. */
         val isValid: Boolean get() = title.isNotBlank()
@@ -48,6 +52,7 @@ object QuickAddParser {
                 dueDate   = dueDate,
                 priority  = priority ?: Priority.MEDIUM,
                 tags      = tags,
+                loe       = loe,
                 filePath  = if (cleanedProject.isNotBlank()) "Tasks/$cleanedProject/$filename" else "Tasks/$filename",
                 createdAt = LocalDateTime.now()
             )
@@ -77,6 +82,7 @@ object QuickAddParser {
         val tags = mutableListOf<String>()
         var priority: Priority? = null
         var dueDate: LocalDate? = null
+        var loe = 0
 
         var i = 0
         while (i < words.size) {
@@ -89,6 +95,9 @@ object QuickAddParser {
                 }
                 lower.startsWith("!") && PRIORITIES.containsKey(lower.drop(1)) -> {
                     priority = PRIORITIES.getValue(lower.drop(1))
+                }
+                lower.startsWith("~") && lower.drop(1).toIntOrNull() in EFFORT_POINTS -> {
+                    loe = lower.drop(1).toInt()
                 }
                 lower == "next" && words.getOrNull(i + 1)?.lowercase() == "week" -> {
                     dueDate = today.plusWeeks(1)
@@ -111,9 +120,13 @@ object QuickAddParser {
             title    = titleWords.joinToString(" "),
             dueDate  = dueDate,
             priority = priority,
-            tags     = tags
+            tags     = tags,
+            loe      = loe
         )
     }
+
+    private val EFFORT_POINTS: Set<Int> =
+        LevelOfEffort.entries.map { it.points }.filter { it > 0 }.toSet()
 
     private val ISO_DATE = Regex("""\d{4}-\d{2}-\d{2}""")
 
