@@ -285,16 +285,20 @@ fun TabletTodoLayout(
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    viewModel.selectTodoForPane(null)
-                    newTaskRequested = true
-                },
-                modifier = Modifier.semantics {
-                    contentDescription = "Add new todo"
+            // Hidden while a form is open: the detail pane's own Save FAB sits in the
+            // same corner and would be covered. Quick-add still works meanwhile.
+            if (!newTaskRequested && selectedTodoId == null) {
+                FloatingActionButton(
+                    onClick = {
+                        viewModel.selectTodoForPane(null)
+                        newTaskRequested = true
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Add new todo"
+                    }
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
                 }
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
