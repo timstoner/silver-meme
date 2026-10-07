@@ -362,4 +362,6 @@ parallelism. H1 and H2 both touch `TodoListScreen.kt`/`TabletTodoLayout.kt`
 - [x] H2 — Checklist editor and card progress (`ChecklistEditor`; "2/5" on cards; next occurrence of a
       recurring task starts unticked). Reordering items is not built yet.
 - [ ] H3 — Configurable daily capacity
-- [ ] H4 — Drop the deprecated Kotlin Android plugin
+- [x] H4 — Drop the deprecated Kotlin Android plugin (built-in Kotlin; `android.builtInKotlin=false` removed).
+      Other AGP 9 opt-outs in `gradle.properties` (`android.newDsl=false` etc.) remain; each needs
+      its own check before removal, and they must go before AGP 10.
