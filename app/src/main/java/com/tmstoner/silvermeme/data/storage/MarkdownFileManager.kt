@@ -74,13 +74,17 @@ class MarkdownFileManager(private val vaultDir: File) {
             .mapNotNull { parseMarkdownFile(it) }
     }
     
-    /** Recursively finds all .md files in a directory and subdirectories (Track E3). */
+    /**
+     * Recursively finds all .md files in a directory and subdirectories (Track E3).
+     * Hidden directories (e.g. `.trash`) are skipped, so trashed tasks never show up
+     * as active ones; [getTrashedTodos] scans the trash folder directly.
+     */
     private fun getAllMarkdownFiles(dir: File): List<File> {
         val files = mutableListOf<File>()
         dir.listFiles()?.forEach { file ->
             when {
                 file.isFile && file.extension == "md" -> files.add(file)
-                file.isDirectory -> files.addAll(getAllMarkdownFiles(file))
+                file.isDirectory && !file.name.startsWith(".") -> files.addAll(getAllMarkdownFiles(file))
             }
         }
         return files
