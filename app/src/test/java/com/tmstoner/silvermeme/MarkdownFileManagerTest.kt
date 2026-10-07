@@ -200,6 +200,32 @@ class MarkdownFileManagerTest {
         assertTrue(!file.exists())
     }
 
+    // ── Trash ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `trashed items are not returned by getAllTodos`() {
+        val saved = manager.saveTodo(sampleTodo())
+        manager.trashTodo(saved)
+        assertTrue(manager.getAllTodos().isEmpty())
+        assertEquals(1, manager.getTrashedTodos().size)
+    }
+
+    @Test
+    fun `trashed project items are not returned by getAllTodos`() {
+        val saved = manager.saveTodo(sampleTodo().copy(filePath = "Tasks/Work/Buy groceries.md"))
+        manager.trashTodo(saved)
+        assertTrue(manager.getAllTodos().isEmpty())
+        assertEquals(1, manager.getTrashedTodos().size)
+    }
+
+    @Test
+    fun `restoreTodo brings a trashed item back into getAllTodos`() {
+        val trashed = manager.trashTodo(manager.saveTodo(sampleTodo()))
+        manager.restoreTodo(trashed)
+        assertEquals(listOf("Buy groceries"), manager.getAllTodos().map { it.title })
+        assertTrue(manager.getTrashedTodos().isEmpty())
+    }
+
     @Test
     fun `getAllTodos returns empty list when folder does not exist`() {
         val manager2 = MarkdownFileManager(java.io.File(tempFolder.root, "nonexistent"))
