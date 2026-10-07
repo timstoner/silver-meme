@@ -67,6 +67,19 @@ class MarkdownFileManager(private val vaultDir: File) {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
+    /**
+     * Names (filename without `.md`) of every note in the vault, not just tasks, for
+     * wikilink suggestions (Track G5). Hidden folders such as `.obsidian`, `.git` and
+     * `Tasks/.trash` are skipped. Sorted case-insensitively, duplicates removed.
+     */
+    fun listNoteNames(): List<String> {
+        if (!vaultDir.exists()) return emptyList()
+        return getAllMarkdownFiles(vaultDir)
+            .map { it.nameWithoutExtension }
+            .distinctBy { it.lowercase() }
+            .sortedBy { it.lowercase() }
+    }
+
     /** Returns all TODO items found in the Tasks folder and subfolders (Track E3). */
     fun getAllTodos(): List<TodoItem> {
         if (!tasksDir.exists()) return emptyList()

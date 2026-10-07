@@ -3,6 +3,7 @@ package com.tmstoner.silvermeme.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.tmstoner.silvermeme.data.model.NoteIndex
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.RecurrenceRule
 import com.tmstoner.silvermeme.data.model.TodoItem
@@ -72,6 +73,19 @@ class TodoViewModel(
     /** Select a task for the detail pane (tablet two-pane). */
     fun selectTodoForPane(id: String?) {
         _selectedTodoId.value = id
+    }
+
+    // ── Wikilinks (Track G5) ──────────────────────────────────────────────────
+
+    private val _noteIndex = MutableStateFlow(NoteIndex.EMPTY)
+    /** Vault note names for `[[` suggestions; empty until [loadNoteIndex] runs. */
+    val noteIndex: StateFlow<NoteIndex> = _noteIndex.asStateFlow()
+
+    /** Re-reads the vault's note names. Called when the task form opens; a failure keeps the old index. */
+    fun loadNoteIndex() {
+        viewModelScope.launch {
+            runCatching { repository.getNoteIndex() }.onSuccess { _noteIndex.value = it }
+        }
     }
 
     // ── Selection state for bulk actions (Track B2) ────────────────────────────

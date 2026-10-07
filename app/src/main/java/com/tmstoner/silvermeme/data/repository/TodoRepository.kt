@@ -1,6 +1,7 @@
 package com.tmstoner.silvermeme.data.repository
 
 import android.content.Context
+import com.tmstoner.silvermeme.data.model.NoteIndex
 import com.tmstoner.silvermeme.data.model.SampleDataProvider
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.model.VaultRegistry
@@ -143,6 +144,11 @@ class TodoRepository(
      * If no remote URL is configured the operation is skipped and a success
      * result is returned to avoid surfacing errors to the user.
      */
+    override suspend fun getNoteIndex(): NoteIndex = withContext(Dispatchers.IO) {
+        val vaultDir = resolveVaultDir()
+        NoteIndex(vaultName = vaultDir.name, noteNames = MarkdownFileManager(vaultDir).listNoteNames())
+    }
+
     override suspend fun pull(): GitRepository.GitResult = withContext(Dispatchers.IO) {
         val remoteUrl = settings.gitRemoteUrl.first()
         if (remoteUrl.isBlank()) return@withContext GitRepository.GitResult.Success
