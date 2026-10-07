@@ -32,8 +32,12 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
             settingsDataStore.authorName,
             settingsDataStore.authorEmail
         ) { path, name, email -> Triple(path, name, email) },
-        combine(settingsDataStore.themeMode, settingsDataStore.dailyCapacity, ::Pair)
-    ) { (url, user, token), (path, name, email), (themeMode, dailyCapacity) ->
+        combine(
+            settingsDataStore.themeMode,
+            settingsDataStore.dailyCapacity,
+            settingsDataStore.backgroundSync
+        ) { theme, capacity, backgroundSync -> Triple(theme, capacity, backgroundSync) }
+    ) { (url, user, token), (path, name, email), (themeMode, dailyCapacity, backgroundSync) ->
         SettingsUiState(
             gitRemoteUrl = url,
             gitUsername  = user,
@@ -42,7 +46,8 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
             authorName   = name,
             authorEmail  = email,
             themeMode    = themeMode,
-            dailyCapacity = dailyCapacity
+            dailyCapacity = dailyCapacity,
+            backgroundSync = backgroundSync
         )
     }.stateIn(
         scope = viewModelScope,
@@ -110,6 +115,16 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
         }
     }
 
+    /**
+     * Turns periodic background sync on or off immediately. `SilverMemeApplication`
+     * watches the setting and schedules or cancels the worker.
+     */
+    fun setBackgroundSync(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setBackgroundSync(enabled)
+        }
+    }
+
     fun clearSavedFlag() {
         _isSaved.value = false
     }
@@ -148,5 +163,7 @@ data class SettingsUiState(
     /** "system", "light", or "dark". */
     val themeMode:    String = "system",
     /** Effort points per day for the capacity bar; 0 turns it off. */
-    val dailyCapacity: Int   = SettingsStore.DEFAULT_DAILY_CAPACITY
+    val dailyCapacity: Int   = SettingsStore.DEFAULT_DAILY_CAPACITY,
+    /** Periodic sync of the active vault while the app is closed (Track G1). */
+    val backgroundSync: Boolean = false
 )

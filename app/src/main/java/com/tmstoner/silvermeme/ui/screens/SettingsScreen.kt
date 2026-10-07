@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -181,6 +183,29 @@ fun SettingsScreen(
                 modifier               = Modifier.fillMaxWidth(),
                 supportingText         = { Text("GitHub PAT with repo scope") }
             )
+
+            // Track G1: applied immediately, like the theme; the app schedules the worker.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value           = state.backgroundSync,
+                        onValueChange   = viewModel::setBackgroundSync,
+                        role            = Role.Switch
+                    )
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Background sync", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Pull and push the active vault about once an hour, even when the app is closed. Needs a network connection.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = state.backgroundSync, onCheckedChange = null)
+            }
 
             Spacer(Modifier.height(8.dp))
 

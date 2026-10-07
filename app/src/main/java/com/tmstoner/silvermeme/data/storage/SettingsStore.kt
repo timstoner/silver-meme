@@ -38,6 +38,8 @@ interface SettingsStore {
      * total in the list's capacity bar. 0 hides the bar.
      */
     val dailyCapacity: Flow<Int>
+    /** Track G1: pull and push the active vault about once an hour while the app is closed. Off by default. */
+    val backgroundSync: Flow<Boolean>
 
     suspend fun setGitRemoteUrl(url: String)
     suspend fun setGitUsername(username: String)
@@ -48,6 +50,7 @@ interface SettingsStore {
     suspend fun setThemeMode(mode: String)
     suspend fun setLastFilterState(serialized: String)
     suspend fun setDailyCapacity(points: Int)
+    suspend fun setBackgroundSync(enabled: Boolean)
 
     companion object {
         /** Daily effort capacity until the user sets their own; roughly an 8-hour work day. */
