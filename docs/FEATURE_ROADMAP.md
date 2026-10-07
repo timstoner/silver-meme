@@ -1,6 +1,6 @@
 # SilverMeme — Feature Roadmap & Delegation Plan
 
-> **Status (2026-10-06):** Tracks A–F, G3, G4 and H1–H4 are done.
+> **Status (2026-10-07):** Everything except G1 (background sync) is done.
 > Remaining and newly identified work is in **Next tracks** near the end of
 > this document — start there. The original track write-ups below are kept
 > as the spec/history for completed work.
@@ -289,10 +289,14 @@ _Last reviewed 2026-10-06 against the code on `main`._
 - [x] E3 — Projects / folders (recursive scan, project picker, project list in the drawer)
 - [x] F — Bulk actions (`81dfd26`; `bulkSave`/`bulkTrash` sync once per batch)
 - [ ] G1 — Background periodic sync
-- [ ] G2 — Multi-vault support
+- [x] G2 — Multi-vault support (`92b4c9b`; Settings → Vaults; per-vault folder/remote/user/PAT; the existing
+      setup migrates to "Default"; switcher in the drawer / tablet pane once there are 2+ vaults).
+      Known gaps: reminders from the previous vault keep firing after a switch; adding a task to a new
+      vault before its first clone makes the clone fail (folder not empty).
 - [x] G3 — Quick-add widget / shortcut (`70c4214`; quick-create and agenda widgets in `widgets/`)
 - [x] G4 — Trash / undo (`bca1d42`; `Tasks/.trash/`, Trash screen, 30-day purge, Undo on swipe-trash)
-- [ ] G5 — Obsidian wikilink support
+- [x] G5 — Obsidian wikilinks (`b90c3fb`; `[[` suggests vault note names in task notes; link chips open the
+      note in Obsidian; plain text in the body, no storage change). No completion after `|` or `#`.
 
 ### UI simplification (2026-10-06, follow-up to B1)
 - [x] Filters have one home: an always-visible chip row (sort, overdue, priority, show done, clear).
@@ -352,10 +356,8 @@ parallelism. H1 and H2 both touch `TodoListScreen.kt`/`TabletTodoLayout.kt`
   plugin deprecation warning; CI still green.
 
 ### Still open from the original plan
-- G1 — Background periodic sync (parallel-safe with H1–H4 except H3, which
-  shares the settings files).
-- G2 — Multi-vault support (own phase; conflicts with H3 on settings files).
-- G5 — Obsidian wikilink support (conflicts with H2 on `TodoDetailScreen.kt`).
+- G1 — Background periodic sync. Now touches the same settings and sync code as G2 (multi-vault):
+  a background sync should sync the active vault (or every vault — decide first).
 
 ### Progress
 - [x] H1 — Tablet parity for the list screen (shared `FilterChipRow` and `TodoGroupList` in `ui/components/`)
