@@ -307,8 +307,8 @@ _Last reviewed 2026-10-06 against the code on `main`._
       chip only for High/Urgent, a single overdue style.
 - [x] Task form: segmented priority, tap-anywhere date field with Today/Tomorrow/Next week chips,
       Enter/comma adds tags, Mark done and Move to trash from the edit screen.
-- Note: the tablet two-pane layout (`TabletTodoLayout.kt`) has its own list header, so swipe,
-  the chip row, quick-add and the capacity bar are phone-only for now.
+- [x] Tablet parity (H1): the tablet list pane uses the same chip row, swipe actions,
+      quick-add bar and capacity bar as the phone.
 
 ---
 
@@ -359,7 +359,7 @@ parallelism. H1 and H2 both touch `TodoListScreen.kt`/`TabletTodoLayout.kt`
 - G5 — Obsidian wikilink support (conflicts with H2 on `TodoDetailScreen.kt`).
 
 ### Progress
-- [ ] H1 — Tablet parity for the list screen
+- [x] H1 — Tablet parity for the list screen (shared `FilterChipRow` and `TodoGroupList` in `ui/components/`)
 - [ ] H2 — Checklist editor and card progress (completes E1)
 - [ ] H3 — Configurable daily capacity
 - [ ] H4 — Drop the deprecated Kotlin Android plugin

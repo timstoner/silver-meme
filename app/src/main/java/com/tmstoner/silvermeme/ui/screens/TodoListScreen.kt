@@ -2,25 +2,13 @@ package com.tmstoner.silvermeme.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -32,36 +20,27 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,20 +50,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tmstoner.silvermeme.R
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
-import com.tmstoner.silvermeme.ui.components.CapacityBar
 import com.tmstoner.silvermeme.ui.components.ConflictResolutionDialog
+import com.tmstoner.silvermeme.ui.components.FilterChipRow
 import com.tmstoner.silvermeme.ui.components.QuickAddBar
-import com.tmstoner.silvermeme.ui.components.TodoItemCard
-import com.tmstoner.silvermeme.viewmodel.FilterState
-import com.tmstoner.silvermeme.viewmodel.SortOrder
+import com.tmstoner.silvermeme.ui.components.TodoGroupList
+import com.tmstoner.silvermeme.ui.components.showTrashedWithUndo
 import com.tmstoner.silvermeme.viewmodel.SyncState
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 import kotlinx.coroutines.launch
@@ -385,95 +361,21 @@ fun TodoListScreen(
                 onRefresh    = { viewModel.syncFromRemote() },
                 modifier     = Modifier.fillMaxSize()
             ) {
-                // Fix 1: keep LazyColumn always mounted; LinearProgressIndicator replaces full spinner
-                Column(modifier = Modifier.fillMaxSize()) {
-                    if (uiState.isLoading) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                    if (!uiState.isLoading && groups.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    "No todos found",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    "Tap + to create one, or pull to sync",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    } else {
-                        // All open tasks due today, regardless of the active filters.
-                        val todayLoe = remember(uiState.todos) { viewModel.getTodayLoe() }
-                        LazyColumn(
-                            contentPadding      = PaddingValues(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (todayLoe > 0) {
-                                item(key = "today_capacity", contentType = "capacity") {
-                                    CapacityBar(loe = todayLoe, capacity = TodoViewModel.DEFAULT_DAILY_CAPACITY)
-                                }
-                            }
-                            groups.forEach { group ->
-                                // Fix 2: stable keys + contentType for group headers
-                                item(key = "header_${group.label}", contentType = "group_header") {
-                                    Text(
-                                        text     = "${group.label} (${group.todos.size})",
-                                        style    = MaterialTheme.typography.titleSmall,
-                                        color    = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(vertical = 4.dp)
-                                    )
-                                }
-                                // Fix 2: stable keys + contentType + animateItem for todo cards
-                                items(
-                                    items       = group.todos,
-                                    key         = { it.id },
-                                    contentType = { "todo_card" }
-                                ) { todo ->
-                                    SwipeableTodoRow(
-                                        todo       = todo,
-                                        enabled    = !isSelecting,
-                                        onComplete = { viewModel.toggleComplete(todo) },
-                                        onTrash    = {
-                                            viewModel.trashTodo(todo)
-                                            scope.launch {
-                                                val result = snackbarHostState.showSnackbar(
-                                                    message     = "Moved to trash",
-                                                    actionLabel = "Undo",
-                                                    duration    = SnackbarDuration.Short
-                                                )
-                                                if (result == SnackbarResult.ActionPerformed) viewModel.undoTrash()
-                                            }
-                                        },
-                                        modifier   = Modifier.animateItem()
-                                    ) {
-                                        TodoItemCard(
-                                            todo             = todo,
-                                            onToggleComplete = { if (!isSelecting) viewModel.toggleComplete(it) },
-                                            onClick          = { t ->
-                                                if (isSelecting) {
-                                                    viewModel.toggleSelection(t.id)
-                                                } else {
-                                                    onEditTodo(t)
-                                                }
-                                            },
-                                            // Long-press enters selection mode, or toggles when already selecting
-                                            onLongClick      = { target -> viewModel.toggleSelection(target.id) },
-                                            isSelected       = todo.id in selectedIds,
-                                            onSelectionToggle = if (isSelecting) {
-                                                { viewModel.toggleSelection(todo.id) }
-                                            } else null
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // All open tasks due today, regardless of the active filters.
+                val todayLoe = remember(uiState.todos) { viewModel.getTodayLoe() }
+                TodoGroupList(
+                    groups            = groups,
+                    isLoading         = uiState.isLoading,
+                    todayLoe          = todayLoe,
+                    selectedIds       = selectedIds,
+                    onOpen            = onEditTodo,
+                    onToggleComplete  = viewModel::toggleComplete,
+                    onTrash           = { todo ->
+                        viewModel.trashTodo(todo)
+                        scope.launch { snackbarHostState.showTrashedWithUndo(viewModel::undoTrash) }
+                    },
+                    onToggleSelection = { viewModel.toggleSelection(it.id) }
+                )
             }
 
             // Inline error
@@ -513,158 +415,3 @@ fun TodoListScreen(
     }
 }
 
-/**
- * Always-visible, horizontally scrolling row of list controls: sort, overdue,
- * priority, show-done, and a clear action when any chip filter is active.
- * Project filtering lives in the navigation drawer.
- */
-@Composable
-private fun FilterChipRow(
-    filterState: FilterState,
-    onSortOrder: (SortOrder) -> Unit,
-    onToggleOverdue: () -> Unit,
-    onPriority: (Priority) -> Unit,
-    onToggleDone: () -> Unit,
-    onClear: () -> Unit
-) {
-    var showSortMenu by remember { mutableStateOf(false) }
-    val hasChipFilters = filterState.priority != null || filterState.showCompleted || filterState.showOverdue
-
-    Row(
-        modifier              = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box {
-            AssistChip(
-                onClick      = { showSortMenu = true },
-                label        = { Text(filterState.sortOrder.label) },
-                leadingIcon  = { Icon(Icons.Filled.SwapVert, contentDescription = null) },
-                trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = "Change sort order") }
-            )
-            DropdownMenu(
-                expanded         = showSortMenu,
-                onDismissRequest = { showSortMenu = false }
-            ) {
-                SortOrder.entries.forEach { order ->
-                    DropdownMenuItem(
-                        text         = { Text(order.label) },
-                        trailingIcon = if (order == filterState.sortOrder) {
-                            { Icon(Icons.Filled.Check, contentDescription = "Selected") }
-                        } else null,
-                        onClick      = {
-                            onSortOrder(order)
-                            showSortMenu = false
-                        }
-                    )
-                }
-            }
-        }
-        FilterChip(
-            selected = filterState.showOverdue,
-            onClick  = onToggleOverdue,
-            label    = { Text("Overdue") }
-        )
-        // Most important first
-        Priority.entries.sortedByDescending { it.sortOrder }.forEach { p ->
-            FilterChip(
-                selected = filterState.priority == p,
-                onClick  = { onPriority(p) },
-                label    = { Text(p.label.replaceFirstChar { it.uppercaseChar() }) }
-            )
-        }
-        FilterChip(
-            selected    = filterState.showCompleted,
-            onClick     = onToggleDone,
-            label       = { Text("Show done") },
-            leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) }
-        )
-        if (hasChipFilters) {
-            AssistChip(
-                onClick     = onClear,
-                label       = { Text("Clear") },
-                leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) }
-            )
-        }
-    }
-}
-
-/**
- * Wraps a list row with swipe gestures: swipe right toggles completion,
- * swipe left moves the task to trash. Disabled during multi-select.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SwipeableTodoRow(
-    todo: TodoItem,
-    enabled: Boolean,
-    onComplete: () -> Unit,
-    onTrash: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                // Snap back; the reloaded list decides whether the row stays visible.
-                SwipeToDismissBoxValue.StartToEnd -> { onComplete(); false }
-                // Row is removed optimistically by the ViewModel.
-                SwipeToDismissBoxValue.EndToStart -> { onTrash(); true }
-                else -> false
-            }
-        },
-        positionalThreshold = { it * 0.4f }
-    )
-
-    SwipeToDismissBox(
-        state                      = dismissState,
-        modifier                   = modifier,
-        enableDismissFromStartToEnd = enabled,
-        enableDismissFromEndToStart = enabled,
-        backgroundContent          = {
-            val direction = dismissState.dismissDirection
-            val color = when (direction) {
-                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primaryContainer
-                SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.errorContainer
-                else                              -> Color.Transparent
-            }
-            Box(
-                modifier         = Modifier
-                    .fillMaxSize()
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(color)
-                    .padding(horizontal = 20.dp),
-                contentAlignment = if (direction == SwipeToDismissBoxValue.EndToStart)
-                    Alignment.CenterEnd else Alignment.CenterStart
-            ) {
-                when (direction) {
-                    SwipeToDismissBoxValue.StartToEnd -> Row(
-                        verticalAlignment     = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(Icons.Filled.CheckCircle, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Text(if (todo.isCompleted) "Reopen" else "Complete",
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            style = MaterialTheme.typography.labelMedium)
-                    }
-                    SwipeToDismissBoxValue.EndToStart -> Row(
-                        verticalAlignment     = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text("Trash",
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.labelMedium)
-                        Icon(Icons.Filled.Delete, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer)
-                    }
-                    else -> Unit
-                }
-            }
-        }
-    ) {
-        content()
-    }
-}
