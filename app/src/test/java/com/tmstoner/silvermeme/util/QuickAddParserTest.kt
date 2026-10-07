@@ -22,6 +22,21 @@ class QuickAddParserTest {
     }
 
     @Test
+    fun `tilde sets level of effort`() {
+        val r = QuickAddParser.parse("Write report ~5 friday", today)
+        assertEquals("Write report", r.title)
+        assertEquals(5, r.loe)
+        assertEquals(5, r.toTodoItem().loe)
+    }
+
+    @Test
+    fun `effort outside the scale stays in the title`() {
+        val r = QuickAddParser.parse("Rate it ~4 out of ~0 ~", today)
+        assertEquals("Rate it ~4 out of ~0 ~", r.title)
+        assertEquals(0, r.loe)
+    }
+
+    @Test
     fun `plain text is all title`() {
         val r = QuickAddParser.parse("  Call the plumber  ", today)
         assertEquals("Call the plumber", r.title)
