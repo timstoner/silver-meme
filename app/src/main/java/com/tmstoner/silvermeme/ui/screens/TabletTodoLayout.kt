@@ -140,23 +140,20 @@ fun TabletTodoLayout(
 
     // Surface sync state as Snackbar messages
     LaunchedEffect(syncState) {
-        when (syncState) {
+        // Read the state once: the snackbar coroutines run after clearSyncState() has
+        // reset it to Idle, so re-reading `syncState` inside them would cast Idle.
+        val state = syncState
+        when (state) {
             is SyncState.Success -> {
-                scope.launch {
-                    snackbarHostState.showSnackbar((syncState as SyncState.Success).message)
-                }
+                scope.launch { snackbarHostState.showSnackbar(state.message) }
                 viewModel.clearSyncState()
             }
             is SyncState.Failure -> {
-                scope.launch {
-                    snackbarHostState.showSnackbar(
-                        "Sync error: ${(syncState as SyncState.Failure).message}"
-                    )
-                }
+                scope.launch { snackbarHostState.showSnackbar("Sync error: ${state.message}") }
                 viewModel.clearSyncState()
             }
             is SyncState.Conflict -> {
-                conflictFiles = (syncState as SyncState.Conflict).files
+                conflictFiles = state.files
                 showConflictDialog = true
             }
             else -> Unit
