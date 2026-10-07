@@ -1,5 +1,6 @@
 package com.tmstoner.silvermeme.viewmodel
 
+import com.tmstoner.silvermeme.data.model.ChecklistItem
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
@@ -103,6 +104,27 @@ class TodoViewModelTest {
         assertEquals(false, spawned!!.isCompleted)
         assertEquals(today.plusDays(1), spawned.dueDate)
         assertTrue(spawned.filePath.isBlank())
+    }
+
+    @Test
+    fun `next occurrence of a recurring todo starts with its checklist unticked`() = runTest {
+        val todo = sampleTodo(
+            id = "weekly-shop",
+            dueDate = LocalDate.now(),
+            isCompleted = false,
+            recurrence = "weekly"
+        ).copy(checklist = listOf(ChecklistItem("Make list", isDone = true), ChecklistItem("Go shopping")))
+        val repository = FakeTodoDataSource(mutableListOf(todo))
+        val viewModel = TodoViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.toggleComplete(todo)
+        advanceUntilIdle()
+
+        // The completed occurrence keeps its ticks; the next one starts fresh.
+        assertEquals(todo.checklist, repository.saved.first { it.id == todo.id }.checklist)
+        val spawned = repository.saved.single { it.id != todo.id }
+        assertEquals(listOf(ChecklistItem("Make list"), ChecklistItem("Go shopping")), spawned.checklist)
     }
 
     @Test

@@ -90,3 +90,7 @@ data class ChecklistItem(
     val text: String,
     val isDone: Boolean = false
 )
+
+/** Trims item text and drops blank items, so an empty `- [ ]` line is never written. */
+fun List<ChecklistItem>.cleaned(): List<ChecklistItem> =
+    map { it.copy(text = it.text.trim()) }.filter { it.text.isNotEmpty() }

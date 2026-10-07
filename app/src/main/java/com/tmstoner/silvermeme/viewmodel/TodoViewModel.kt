@@ -221,6 +221,8 @@ class TodoViewModel(
                             id = java.util.UUID.randomUUID().toString(),
                             isCompleted = false,
                             dueDate = nextDueDate,
+                            // Same steps, none done yet.
+                            checklist = todo.checklist.map { it.copy(isDone = false) },
                             filePath = "",   // force fresh filename derivation
                             updatedAt = java.time.LocalDateTime.now()
                         )

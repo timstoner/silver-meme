@@ -66,11 +66,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tmstoner.silvermeme.data.model.ChecklistItem
 import com.tmstoner.silvermeme.data.model.LevelOfEffort
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.RecurrenceRule
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.model.cleaned
 import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
+import com.tmstoner.silvermeme.ui.components.ChecklistEditor
+import com.tmstoner.silvermeme.ui.components.ChecklistSaver
 import com.tmstoner.silvermeme.ui.components.RecurrenceDialog
 import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 import java.time.Instant
@@ -84,7 +88,7 @@ private val DATE_DISPLAY = DateTimeFormatter.ofPattern("MMM d, yyyy")
 /**
  * Screen for creating a new TODO item or editing an existing one.
  *
- * Always visible: Title, Priority (segmented), Due date (quick chips), Notes.
+ * Always visible: Title, Priority (segmented), Due date (quick chips), Notes, Checklist.
  * When editing, the top bar also offers Mark done/Reopen and Move to trash.
  * Behind the "Show more options" toggle (auto-expanded when editing a task that
  * already uses them): Level of Effort, Project/folder, Location, Tags, Schedule.
@@ -120,6 +124,10 @@ fun TodoDetailScreen(
         mutableStateOf(existingTodo?.recurrence ?: "none")
     }
     val recurrenceRule = RecurrenceRule.parse(recurrenceString)
+
+    var checklist by rememberSaveable(existingTodo?.id, stateSaver = ChecklistSaver) {
+        mutableStateOf(existingTodo?.checklist ?: emptyList())
+    }
 
     var tagInput   by rememberSaveable(existingTodo?.id) { mutableStateOf("") }
     var titleError by remember { mutableStateOf(false) }
@@ -160,8 +168,7 @@ fun TodoDetailScreen(
             createdAt   = existingTodo?.createdAt ?: java.time.LocalDateTime.now(),
             recurrence  = recurrenceRule.toStorageString(),
             loe         = loe,
-            // Fix 4 (P0-checklist UI side): preserve checklist from existing todo
-            checklist   = existingTodo?.checklist ?: emptyList()
+            checklist   = checklist.cleaned()
         )
     }
 
@@ -181,7 +188,8 @@ fun TodoDetailScreen(
                   loe              != (existingTodo?.loe        ?: 0)             ||
                   project          != (existingTodo?.project    ?: "")           ||
                   tagsString       != (existingTodo?.tags?.joinToString(",") ?: "") ||
-                  recurrenceString != (existingTodo?.recurrence ?: "none")
+                  recurrenceString != (existingTodo?.recurrence ?: "none")    ||
+                  checklist        != (existingTodo?.checklist  ?: emptyList<ChecklistItem>())
 
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showTrashDialog   by remember { mutableStateOf(false) }
@@ -335,6 +343,12 @@ fun TodoDetailScreen(
                 label         = { Text("Notes (Markdown)") },
                 minLines      = 4,
                 modifier      = Modifier.fillMaxWidth()
+            )
+
+            // -- Checklist (saved as `- [ ]` / `- [x]` lines in the markdown body)
+            ChecklistEditor(
+                items         = checklist,
+                onItemsChange = { checklist = it }
             )
 
             HorizontalDivider()

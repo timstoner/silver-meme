@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Repeat
@@ -51,7 +52,7 @@ private val DATE_OTHER_YEAR = DateTimeFormatter.ofPattern("MMM d, yyyy")
  *  - completion toggle
  *  - title (struck-through when done)
  *  - one wrapping metadata line: due date (red, with "Nd overdue" when late),
- *    location, project, and up to 3 tags
+ *    checklist progress ("2/5"), location, project, and up to 3 tags
  *  - recurrence indicator next to the title
  *  - priority chip (High/Urgent only — Low/Medium are the quiet default) and
  *    LOE badge, right-aligned at the end of the row
@@ -134,8 +135,8 @@ fun TodoItemCard(
                     }
                 }
 
-                val hasMetadata = todo.dueDate != null || !todo.location.isNullOrBlank() ||
-                    todo.project.isNotBlank() || todo.tags.isNotEmpty()
+                val hasMetadata = todo.dueDate != null || todo.checklist.isNotEmpty() ||
+                    !todo.location.isNullOrBlank() || todo.project.isNotBlank() || todo.tags.isNotEmpty()
                 if (hasMetadata) {
                     Spacer(Modifier.height(4.dp))
                     FlowRow(
@@ -152,6 +153,16 @@ fun TodoItemCard(
                                 text       = if (overdue) "$dateText · ${overdueDays}d overdue" else dateText,
                                 color      = color,
                                 bold       = overdue
+                            )
+                        }
+                        if (todo.checklist.isNotEmpty()) {
+                            val done = todo.checklist.count { it.isDone }
+                            MetaItem(
+                                icon      = Icons.Filled.Checklist,
+                                iconLabel = "Checklist",
+                                text      = "$done/${todo.checklist.size}",
+                                color     = if (done == todo.checklist.size) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         todo.location?.takeIf { it.isNotBlank() }?.let { loc ->

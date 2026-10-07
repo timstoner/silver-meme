@@ -1,6 +1,6 @@
 # SilverMeme — Feature Roadmap & Delegation Plan
 
-> **Status (2026-10-06):** Tracks A–F, G3 and G4 are done; E1 is partial.
+> **Status (2026-10-06):** Tracks A–F, G3, G4, H1 and H2 are done.
 > Remaining and newly identified work is in **Next tracks** near the end of
 > this document — start there. The original track write-ups below are kept
 > as the spec/history for completed work.
@@ -284,8 +284,7 @@ _Last reviewed 2026-10-06 against the code on `main`._
 - [x] C — Notifications & reminders (WorkManager reminders, cancel on complete/trash, `BootReceiver`;
       `POST_NOTIFICATIONS` requested on first launch on Android 13+, reminders rescheduled once granted)
 - [x] D — Testing & CI infrastructure (`TodoDataSource` seam, `TodoViewModelTest`, round-trip helper, `.github/workflows/android-test.yml`)
-- [ ] E1 — Checklists / subtasks — **partial**: `checklist` model + markdown `- [ ]` round-trip done
-      and covered by tests. Still missing: the checklist editor in `TodoDetailScreen` and the "2/5" progress on `TodoItemCard`.
+- [x] E1 — Checklists / subtasks (model + `- [ ]` round-trip; editor and card progress finished in H2)
 - [x] E2 — Recurring tasks (`RecurrenceRule`, `RecurrenceDialog`, next occurrence spawned on complete)
 - [x] E3 — Projects / folders (recursive scan, project picker, project list in the drawer)
 - [x] F — Bulk actions (`81dfd26`; `bulkSave`/`bulkTrash` sync once per batch)
@@ -360,6 +359,7 @@ parallelism. H1 and H2 both touch `TodoListScreen.kt`/`TabletTodoLayout.kt`
 
 ### Progress
 - [x] H1 — Tablet parity for the list screen (shared `FilterChipRow` and `TodoGroupList` in `ui/components/`)
-- [ ] H2 — Checklist editor and card progress (completes E1)
+- [x] H2 — Checklist editor and card progress (`ChecklistEditor`; "2/5" on cards; next occurrence of a
+      recurring task starts unticked). Reordering items is not built yet.
 - [ ] H3 — Configurable daily capacity
 - [ ] H4 — Drop the deprecated Kotlin Android plugin

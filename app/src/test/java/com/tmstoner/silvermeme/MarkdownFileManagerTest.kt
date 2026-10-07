@@ -1,7 +1,9 @@
 package com.tmstoner.silvermeme
 
+import com.tmstoner.silvermeme.data.model.ChecklistItem
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.model.cleaned
 import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -268,6 +270,21 @@ class MarkdownFileManagerTest {
     }
 
     // ── Checklist round-trip (Bug 2 regression guard) ────────────────────────
+
+    @Test
+    fun `cleaned checklist drops blank items so they are not saved`() {
+        val edited = listOf(
+            ChecklistItem("  Pack bags ", isDone = true),
+            ChecklistItem("   "),
+            ChecklistItem("Book taxi")
+        )
+        manager.saveTodo(sampleTodo().copy(checklist = edited.cleaned()))
+        val reloaded = manager.getAllTodos().single()
+        assertEquals(
+            listOf(ChecklistItem("Pack bags", isDone = true), ChecklistItem("Book taxi")),
+            reloaded.checklist
+        )
+    }
 
     @Test
     fun `checklist items survive a full save-parse-edit-save-parse round trip`() {
