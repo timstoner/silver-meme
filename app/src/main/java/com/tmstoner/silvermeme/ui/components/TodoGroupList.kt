@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tmstoner.silvermeme.data.model.TodoItem
@@ -40,8 +43,8 @@ import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 
 /**
  * The grouped task list shared by the phone list screen and the tablet list pane:
- * loading indicator, empty state, today's capacity bar, group headers, and
- * swipeable [TodoItemCard] rows.
+ * loading indicator, empty state, today's capacity bar (pinned above the list),
+ * group headers, and swipeable [TodoItemCard] rows.
  *
  * While [selectedIds] is non-empty the list is in multi-select mode: swipes are
  * disabled and taps toggle selection instead of opening the task.
@@ -85,15 +88,24 @@ fun TodoGroupList(
                 }
             }
         } else {
+            // Pinned above the list rather than a list item: an item inserted at the top
+            // lands off-screen, because LazyColumn keeps the current first item in place.
+            if (todayLoe > 0) {
+                val layoutDirection = LocalLayoutDirection.current
+                CapacityBar(
+                    loe      = todayLoe,
+                    capacity = TodoViewModel.DEFAULT_DAILY_CAPACITY,
+                    modifier = Modifier.padding(
+                        start = contentPadding.calculateStartPadding(layoutDirection),
+                        top   = contentPadding.calculateTopPadding(),
+                        end   = contentPadding.calculateEndPadding(layoutDirection)
+                    )
+                )
+            }
             LazyColumn(
                 contentPadding      = contentPadding,
                 verticalArrangement = Arrangement.spacedBy(itemSpacing)
             ) {
-                if (todayLoe > 0) {
-                    item(key = "today_capacity", contentType = "capacity") {
-                        CapacityBar(loe = todayLoe, capacity = TodoViewModel.DEFAULT_DAILY_CAPACITY)
-                    }
-                }
                 groups.forEach { group ->
                     item(key = "header_${group.label}", contentType = "group_header") {
                         Text(
