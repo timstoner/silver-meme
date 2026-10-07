@@ -36,7 +36,7 @@ import com.tmstoner.silvermeme.util.WikiLinks
 
 /**
  * The task form's markdown notes field with Obsidian wikilink support (Track G5):
- *  - typing `[[` lists matching vault notes under the field; tapping one inserts
+ *  - typing `[[` lists matching vault notes above the field; tapping one inserts
  *    `[[Note]]`
  *  - links already in the notes show as chips that open the note in Obsidian
  */
@@ -57,24 +57,15 @@ fun WikiLinkNotesField(
     val linkTargets = remember(value.text) { WikiLinks.targets(value.text) }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value         = value,
-            onValueChange = onValueChange,
-            label         = { Text("Notes (Markdown)") },
-            supportingText = if (openLink == null && linkTargets.isEmpty()) {
-                { Text("Type [[ to link a note") }
-            } else null,
-            minLines      = 4,
-            modifier      = Modifier.fillMaxWidth()
-        )
-
+        // Suggestions sit above the field: the form pans rather than resizes for the
+        // keyboard, so anything below the field would be hidden behind it.
         if (openLink != null && suggestions.isNotEmpty()) {
             Surface(
                 tonalElevation = 3.dp,
                 shape          = MaterialTheme.shapes.small,
                 modifier       = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp)
+                    .padding(bottom = 4.dp)
             ) {
                 Column {
                     suggestions.forEachIndexed { index, name ->
@@ -106,6 +97,17 @@ fun WikiLinkNotesField(
                 }
             }
         }
+
+        OutlinedTextField(
+            value         = value,
+            onValueChange = onValueChange,
+            label         = { Text("Notes (Markdown)") },
+            supportingText = if (openLink == null && linkTargets.isEmpty()) {
+                { Text("Type [[ to link a note") }
+            } else null,
+            minLines      = 4,
+            modifier      = Modifier.fillMaxWidth()
+        )
 
         if (linkTargets.isNotEmpty()) {
             FlowRow(
