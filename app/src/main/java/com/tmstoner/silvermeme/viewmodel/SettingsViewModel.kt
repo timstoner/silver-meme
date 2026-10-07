@@ -3,6 +3,7 @@ package com.tmstoner.silvermeme.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.tmstoner.silvermeme.data.model.VaultConfig
 import com.tmstoner.silvermeme.data.storage.SettingsDataStore
 import com.tmstoner.silvermeme.data.storage.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +49,35 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = SettingsUiState()
     )
+
+    // ── Vaults (Track G2) ─────────────────────────────────────────────────────
+
+    val vaults: StateFlow<List<VaultConfig>> = settingsDataStore.vaults
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val activeVaultId: StateFlow<String?> = settingsDataStore.activeVaultId
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Adds a local vault and makes it active so its git settings can be filled in. */
+    fun addVault(name: String) {
+        viewModelScope.launch {
+            val vault = settingsDataStore.addVault(name)
+            settingsDataStore.setActiveVault(vault.id)
+        }
+    }
+
+    fun renameVault(id: String, name: String) {
+        viewModelScope.launch { settingsDataStore.renameVault(id, name) }
+    }
+
+    /** Forgets the vault; its files stay on the device. The last vault can't be removed. */
+    fun removeVault(id: String) {
+        viewModelScope.launch { settingsDataStore.removeVault(id) }
+    }
+
+    fun setActiveVault(id: String) {
+        viewModelScope.launch { settingsDataStore.setActiveVault(id) }
+    }
 
     private val _isSaved = MutableStateFlow(false)
     val isSaved: StateFlow<Boolean> = _isSaved.asStateFlow()

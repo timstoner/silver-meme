@@ -3,6 +3,8 @@ package com.tmstoner.silvermeme.viewmodel
 import com.tmstoner.silvermeme.data.model.ChecklistItem
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.model.VaultConfig
+import com.tmstoner.silvermeme.data.model.VaultRegistry
 import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
 import com.tmstoner.silvermeme.data.repository.GitRepository
 import com.tmstoner.silvermeme.data.repository.TodoDataSource
@@ -150,6 +152,41 @@ class TodoViewModelTest {
     }
 
     @Test
+    fun `switching vault reloads the list and drops selection, project filter and undo`() = runTest {
+        val vaultTodos = mutableListOf(sampleTodo(id = "a", title = "Default task"))
+        val repository = FakeTodoDataSource(vaultTodos)
+        val settings = FakeSettingsStore(capacity = 21)
+        val viewModel = TodoViewModel(repository, settings)
+        advanceUntilIdle()
+        val work = settings.addVault("Work")
+        advanceUntilIdle()
+        assertEquals(listOf("Default", "Work"), viewModel.vaults.value.map { it.name })
+
+        viewModel.setFilterProject("Errands")
+        viewModel.toggleSelection("a")
+        viewModel.selectTodoForPane("a")
+        viewModel.trashTodo(vaultTodos.first())
+        advanceUntilIdle()
+
+        // The repository now reads the other vault.
+        vaultTodos.clear()
+        vaultTodos += sampleTodo(id = "w", title = "Work task")
+        viewModel.switchVault(work.id)
+        advanceUntilIdle()
+
+        assertEquals(work.id, viewModel.activeVaultId.value)
+        assertEquals(listOf("Work task"), viewModel.uiState.value.todos.map { it.title })
+        assertTrue(viewModel.selectedIds.value.isEmpty())
+        assertEquals(null, viewModel.selectedTodoId.value)
+        assertEquals(null, viewModel.filterState.value.project)
+
+        // Undo from the previous vault must not restore into this one.
+        viewModel.undoTrash()
+        advanceUntilIdle()
+        assertEquals(listOf("Work task"), viewModel.uiState.value.todos.map { it.title })
+    }
+
+    @Test
     fun `toggleComplete on non-recurring todo does not spawn a next occurrence`() = runTest {
         val todo = sampleTodo(id = "one-off", isCompleted = false, recurrence = "none")
         val repository = FakeTodoDataSource(mutableListOf(todo))
@@ -287,6 +324,22 @@ private class FakeTodoDataSource(
 
 /** In-memory [SettingsStore]; only the capacity is observable, the rest are fixed values. */
 private class FakeSettingsStore(capacity: Int) : SettingsStore {
+    // ── Vaults (G2) ──
+    private val vaultList = MutableStateFlow(listOf(VaultConfig(VaultRegistry.DEFAULT_ID, "Default")))
+    private val activeId = MutableStateFlow(VaultRegistry.DEFAULT_ID)
+    override val vaults: Flow<List<VaultConfig>> = vaultList
+    override val activeVaultId: Flow<String> = activeId
+    override suspend fun addVault(name: String): VaultConfig =
+        VaultConfig("v${vaultList.value.size + 1}", name).also { vaultList.value = vaultList.value + it }
+    override suspend fun renameVault(id: String, name: String) {
+        vaultList.value = VaultRegistry.update(vaultList.value, id) { it.copy(name = name) }
+    }
+    override suspend fun removeVault(id: String): Boolean {
+        vaultList.value = VaultRegistry.remove(vaultList.value, id) ?: return false
+        return true
+    }
+    override suspend fun setActiveVault(id: String) { activeId.value = id }
+
     private val capacityFlow = MutableStateFlow(capacity)
 
     override val gitRemoteUrl: Flow<String> = flowOf("")

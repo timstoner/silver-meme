@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.tmstoner.silvermeme.data.model.Priority
 import com.tmstoner.silvermeme.data.model.RecurrenceRule
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.model.VaultConfig
 import com.tmstoner.silvermeme.data.repository.GitRepository
 import com.tmstoner.silvermeme.data.repository.TodoDataSource
 import com.tmstoner.silvermeme.data.storage.SettingsStore
@@ -19,6 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -89,6 +92,40 @@ class TodoViewModel(
     private val _trashedTodos = MutableStateFlow<List<TodoItem>>(emptyList())
     val trashedTodos: StateFlow<List<TodoItem>> = _trashedTodos.asStateFlow()
 
+    // ── Vaults (Track G2) ─────────────────────────────────────────────────────
+
+    /** Configured vaults (empty when there is no settings store, e.g. in tests). */
+    val vaults: StateFlow<List<VaultConfig>> =
+        settingsStore?.vaults
+            ?.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+            ?: MutableStateFlow<List<VaultConfig>>(emptyList()).asStateFlow()
+
+    val activeVaultId: StateFlow<String?> =
+        settingsStore?.activeVaultId
+            ?.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+            ?: MutableStateFlow<String?>(null).asStateFlow()
+
+    /** Makes [id] the active vault; the list reloads once the setting is stored. */
+    fun switchVault(id: String) {
+        val store = settingsStore ?: return
+        viewModelScope.launch { store.setActiveVault(id) }
+    }
+
+    /**
+     * Everything shown belongs to the previous vault: drop selection, the open
+     * pane, a pending undo and the project filter, then reload and pull (which
+     * clones the vault on first use when it has a remote).
+     */
+    private fun onVaultChanged() {
+        lastTrash = null
+        _selectedIds.value = emptySet()
+        _selectedTodoId.value = null
+        if (_filterState.value.project != null) updateFilter { it.copy(project = null) }
+        loadTodos()
+        loadTrash()
+        syncFromRemote()
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
 
     init {
@@ -97,6 +134,12 @@ class TodoViewModel(
         loadTrash()
         // Purge trash items older than 30 days on startup.
         viewModelScope.launch { repository.purgeOldTrash() }
+        // Reload when the user switches vault (the first value is the vault we just loaded).
+        settingsStore?.let { store ->
+            viewModelScope.launch {
+                store.activeVaultId.distinctUntilChanged().drop(1).collect { onVaultChanged() }
+            }
+        }
         // Debounce search input: persist to DataStore only after 250 ms of inactivity.
         viewModelScope.launch {
             _searchInput

@@ -3,6 +3,7 @@ package com.tmstoner.silvermeme.data.repository
 import android.content.Context
 import com.tmstoner.silvermeme.data.model.SampleDataProvider
 import com.tmstoner.silvermeme.data.model.TodoItem
+import com.tmstoner.silvermeme.data.model.VaultRegistry
 import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
 import com.tmstoner.silvermeme.data.storage.MarkdownFileManager
 import com.tmstoner.silvermeme.data.storage.SettingsStore
@@ -27,8 +28,9 @@ class TodoRepository(
     // ── Vault directory resolution ────────────────────────────────────────────
 
     /**
-     * Resolves the local vault directory from settings, falling back to the
-     * app's external files directory.
+     * Resolves the ACTIVE vault's local directory from settings (Track G2),
+     * falling back to the app's external files directory. Only the default vault
+     * can have a blank path; added vaults get their own directory when created.
      */
     private suspend fun resolveVaultDir(): File {
         val savedPath = settings.vaultPath.first()
@@ -195,9 +197,12 @@ class TodoRepository(
      * This provides a good onboarding experience for first-time users, showing them
      * the app's capabilities with realistic lorem ipsum content and various task states.
      *
-     * Safe to call multiple times — no-op if tasks already exist.
+     * Safe to call multiple times — no-op if tasks already exist. Only the default
+     * vault gets samples: a vault added later is meant to be cloned or filled by the
+     * user, and sample files would make the first clone into it fail.
      */
     suspend fun initializeSampleDataIfNeeded() = withContext(Dispatchers.IO) {
+        if (settings.activeVaultId.first() != VaultRegistry.DEFAULT_ID) return@withContext
         val existingTodos = getTodos()
         if (existingTodos.isNotEmpty()) {
             // Vault already has data; don't add samples

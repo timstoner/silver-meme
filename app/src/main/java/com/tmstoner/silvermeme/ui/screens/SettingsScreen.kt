@@ -46,6 +46,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.tmstoner.silvermeme.ui.components.VaultSettingsSection
 import com.tmstoner.silvermeme.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 
@@ -53,7 +54,8 @@ import kotlinx.coroutines.launch
  * Settings screen for configuring the remote git repository.
  *
  * The user supplies:
- *  - Git remote HTTPS URL  (e.g. https://github.com/user/vault.git)
+ *  - Vaults (G2): which vault is active, plus add / rename / remove
+ *  - Git remote HTTPS URL  (e.g. https://github.com/user/vault.git) — for the active vault
  *  - Username             (GitHub username)
  *  - Personal Access Token (kept locally in DataStore)
  *  - Author name / email  (for git commits)
@@ -67,14 +69,17 @@ fun SettingsScreen(
 ) {
     val state by viewModel.settingsState.collectAsState()
     val isSaved by viewModel.isSaved.collectAsState()
+    val vaults by viewModel.vaults.collectAsState()
+    val activeVaultId by viewModel.activeVaultId.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     // Editable copies of the settings
-    var remoteUrl    by remember(state.gitRemoteUrl)  { mutableStateOf(state.gitRemoteUrl)  }
-    var username     by remember(state.gitUsername)   { mutableStateOf(state.gitUsername)   }
-    var token        by remember(state.gitToken)      { mutableStateOf(state.gitToken)      }
+    // (keyed on the active vault too, so text typed for one vault is never saved into another)
+    var remoteUrl    by remember(activeVaultId, state.gitRemoteUrl) { mutableStateOf(state.gitRemoteUrl) }
+    var username     by remember(activeVaultId, state.gitUsername)  { mutableStateOf(state.gitUsername)  }
+    var token        by remember(activeVaultId, state.gitToken)     { mutableStateOf(state.gitToken)     }
     var authorName   by remember(state.authorName)    { mutableStateOf(state.authorName)    }
     var authorEmail  by remember(state.authorEmail)   { mutableStateOf(state.authorEmail)   }
     var capacity     by remember(state.dailyCapacity) { mutableStateOf(state.dailyCapacity.toString()) }
@@ -124,6 +129,16 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // ── Section: Vaults (G2) ──────────────────────────────────────────
+            VaultSettingsSection(
+                vaults        = vaults,
+                activeVaultId = activeVaultId,
+                onSelect      = viewModel::setActiveVault,
+                onAdd         = viewModel::addVault,
+                onRename      = viewModel::renameVault,
+                onRemove      = viewModel::removeVault
+            )
+
             // ── Section: Git remote ───────────────────────────────────────────
             Text("Git Remote", style = MaterialTheme.typography.titleMedium)
 

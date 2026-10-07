@@ -2,6 +2,7 @@ package com.tmstoner.silvermeme.data.storage
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -9,15 +10,20 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.tmstoner.silvermeme.data.model.VaultCodec
+import com.tmstoner.silvermeme.data.model.VaultConfig
+import com.tmstoner.silvermeme.data.model.VaultRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.UUID
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "silver_meme_settings")
 
@@ -42,6 +48,10 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
         private val KEY_VAULT_PATH        = stringPreferencesKey("vault_path")
         private val KEY_AUTHOR_NAME       = stringPreferencesKey("author_name")
         private val KEY_AUTHOR_EMAIL      = stringPreferencesKey("author_email")
+        // Multi-vault (G2). The single-vault keys above (remote URL, username, vault
+        // path) are kept in sync with the "default" vault so a downgrade still works.
+        private val KEY_VAULTS            = stringPreferencesKey("vaults")
+        private val KEY_ACTIVE_VAULT_ID   = stringPreferencesKey("active_vault_id")
         private val KEY_THEME_MODE        = stringPreferencesKey("theme_mode")
         private val KEY_LAST_FILTER_STATE = stringPreferencesKey("last_filter_state")
         private val KEY_DAILY_CAPACITY    = intPreferencesKey("daily_capacity")
@@ -90,27 +100,103 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
         }
     }
 
+    // ── Vaults (Track G2) ─────────────────────────────────────────────────────
+
+    private fun vaultsIn(prefs: Preferences): List<VaultConfig> =
+        VaultRegistry.resolve(
+            serialized      = prefs[KEY_VAULTS],
+            legacyRemoteUrl = prefs[KEY_GIT_REMOTE_URL] ?: "",
+            legacyUsername  = prefs[KEY_GIT_USERNAME] ?: "",
+            legacyPath      = prefs[KEY_VAULT_PATH] ?: ""
+        )
+
+    private fun activeIn(prefs: Preferences): VaultConfig =
+        VaultRegistry.activeOf(vaultsIn(prefs), prefs[KEY_ACTIVE_VAULT_ID])
+
+    /** Writes [vaults] and mirrors the default vault into the single-vault keys. */
+    private fun MutablePreferences.storeVaults(vaults: List<VaultConfig>) {
+        this[KEY_VAULTS] = VaultCodec.encode(vaults)
+        vaults.firstOrNull { it.id == VaultRegistry.DEFAULT_ID }?.let { default ->
+            this[KEY_GIT_REMOTE_URL] = default.remoteUrl
+            this[KEY_GIT_USERNAME]   = default.username
+            this[KEY_VAULT_PATH]     = default.path
+        }
+    }
+
+    private suspend fun editActiveVault(transform: (VaultConfig) -> VaultConfig) {
+        context.dataStore.edit { prefs ->
+            val active = activeIn(prefs)
+            prefs.storeVaults(VaultRegistry.update(vaultsIn(prefs), active.id, transform))
+        }
+    }
+
+    override val vaults: Flow<List<VaultConfig>> = context.dataStore.data
+        .map { vaultsIn(it) }
+        .distinctUntilChanged()
+
+    override val activeVaultId: Flow<String> = context.dataStore.data
+        .map { activeIn(it).id }
+        .distinctUntilChanged()
+
+    override suspend fun addVault(name: String): VaultConfig {
+        val id = UUID.randomUUID().toString().take(8)
+        val dir = context.getExternalFilesDir("vaults/$id") ?: File(context.filesDir, "vaults/$id")
+        val vault = VaultConfig(id = id, name = name.trim().ifBlank { "Vault" }, path = dir.absolutePath)
+        context.dataStore.edit { prefs -> prefs.storeVaults(vaultsIn(prefs) + vault) }
+        return vault
+    }
+
+    override suspend fun renameVault(id: String, name: String) {
+        val cleaned = name.trim()
+        if (cleaned.isEmpty()) return
+        context.dataStore.edit { prefs ->
+            prefs.storeVaults(VaultRegistry.update(vaultsIn(prefs), id) { it.copy(name = cleaned) })
+        }
+    }
+
+    override suspend fun removeVault(id: String): Boolean {
+        var removed = false
+        context.dataStore.edit { prefs ->
+            val remaining = VaultRegistry.remove(vaultsIn(prefs), id) ?: return@edit
+            prefs.storeVaults(remaining)
+            if (prefs[KEY_ACTIVE_VAULT_ID] == id) prefs[KEY_ACTIVE_VAULT_ID] = remaining.first().id
+            removed = true
+        }
+        if (removed) {
+            withContext(Dispatchers.IO) {
+                encryptedPrefs.edit().remove(VaultRegistry.tokenKey(id)).apply()
+            }
+        }
+        return removed
+    }
+
+    override suspend fun setActiveVault(id: String) {
+        context.dataStore.edit { prefs ->
+            if (vaultsIn(prefs).any { it.id == id }) prefs[KEY_ACTIVE_VAULT_ID] = id
+        }
+    }
+
     // ── Flows (reactive reads) ────────────────────────────────────────────────
 
     override val gitRemoteUrl: Flow<String> = context.dataStore.data
-        .map { it[KEY_GIT_REMOTE_URL] ?: "" }
+        .map { activeIn(it).remoteUrl }
 
     override val gitUsername: Flow<String> = context.dataStore.data
-        .map { it[KEY_GIT_USERNAME] ?: "" }
+        .map { activeIn(it).username }
 
     /**
-     * Cold flow that reads the PAT from [EncryptedSharedPreferences].
+     * The active vault's PAT from [EncryptedSharedPreferences].
      *
-     * Not reactive in the DataStore sense — callers use `.first()` inside suspend
-     * functions, so a cold `flow { emit(...) }` is sufficient and avoids the
-     * complexity of a SharedPreferences listener.
+     * Re-emits when the active vault changes, not when the token itself is
+     * rewritten — callers use `.first()` inside suspend functions, so that is
+     * sufficient and avoids a SharedPreferences listener.
      */
-    override val gitToken: Flow<String> = flow {
-        emit(encryptedPrefs.getString(KEY_ENCRYPTED_TOKEN, "") ?: "")
-    }.flowOn(Dispatchers.IO)
+    override val gitToken: Flow<String> = activeVaultId
+        .map { id -> encryptedPrefs.getString(VaultRegistry.tokenKey(id), "") ?: "" }
+        .flowOn(Dispatchers.IO)
 
     override val vaultPath: Flow<String> = context.dataStore.data
-        .map { it[KEY_VAULT_PATH] ?: "" }
+        .map { activeIn(it).path }
 
     override val authorName: Flow<String> = context.dataStore.data
         .map { it[KEY_AUTHOR_NAME] ?: "SilverMeme" }
@@ -131,27 +217,28 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
     // ── Writes ────────────────────────────────────────────────────────────────
 
     override suspend fun setGitRemoteUrl(url: String) {
-        context.dataStore.edit { it[KEY_GIT_REMOTE_URL] = url }
+        editActiveVault { it.copy(remoteUrl = url) }
     }
 
     override suspend fun setGitUsername(username: String) {
-        context.dataStore.edit { it[KEY_GIT_USERNAME] = username }
+        editActiveVault { it.copy(username = username) }
     }
 
     /**
-     * Writes the PAT to [EncryptedSharedPreferences] only.
+     * Writes the active vault's PAT to [EncryptedSharedPreferences] only.
      * Also removes any residual plaintext value from DataStore.
      */
     override suspend fun setGitToken(token: String) {
+        val key = VaultRegistry.tokenKey(activeVaultId.first())
         withContext(Dispatchers.IO) {
-            encryptedPrefs.edit().putString(KEY_ENCRYPTED_TOKEN, token).apply()
+            encryptedPrefs.edit().putString(key, token).apply()
             // Ensure no plaintext copy lingers in DataStore
             context.dataStore.edit { it.remove(KEY_GIT_TOKEN) }
         }
     }
 
     override suspend fun setVaultPath(path: String) {
-        context.dataStore.edit { it[KEY_VAULT_PATH] = path }
+        editActiveVault { it.copy(path = path) }
     }
 
     override suspend fun setAuthorName(name: String) {
