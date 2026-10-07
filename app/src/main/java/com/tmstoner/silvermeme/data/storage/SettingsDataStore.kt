@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -43,6 +44,7 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
         private val KEY_AUTHOR_EMAIL      = stringPreferencesKey("author_email")
         private val KEY_THEME_MODE        = stringPreferencesKey("theme_mode")
         private val KEY_LAST_FILTER_STATE = stringPreferencesKey("last_filter_state")
+        private val KEY_DAILY_CAPACITY    = intPreferencesKey("daily_capacity")
 
         // EncryptedSharedPreferences key for the PAT
         private const val ENCRYPTED_PREFS_FILE = "secure_settings"
@@ -123,6 +125,9 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
     override val lastFilterState: Flow<String> = context.dataStore.data
         .map { it[KEY_LAST_FILTER_STATE] ?: "" }
 
+    override val dailyCapacity: Flow<Int> = context.dataStore.data
+        .map { it[KEY_DAILY_CAPACITY] ?: SettingsStore.DEFAULT_DAILY_CAPACITY }
+
     // ── Writes ────────────────────────────────────────────────────────────────
 
     override suspend fun setGitRemoteUrl(url: String) {
@@ -163,6 +168,10 @@ class SettingsDataStore(private val context: Context) : SettingsStore {
 
     override suspend fun setLastFilterState(serialized: String) {
         context.dataStore.edit { it[KEY_LAST_FILTER_STATE] = serialized }
+    }
+
+    override suspend fun setDailyCapacity(points: Int) {
+        context.dataStore.edit { it[KEY_DAILY_CAPACITY] = points }
     }
 
     /** Returns a snapshot of all settings (non-reactive, for one-shot reads). */

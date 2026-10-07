@@ -6,8 +6,12 @@ import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.data.model.WidgetTodoSnapshot
 import com.tmstoner.silvermeme.data.repository.GitRepository
 import com.tmstoner.silvermeme.data.repository.TodoDataSource
+import com.tmstoner.silvermeme.data.storage.SettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -125,6 +129,24 @@ class TodoViewModelTest {
         assertEquals(todo.checklist, repository.saved.first { it.id == todo.id }.checklist)
         val spawned = repository.saved.single { it.id != todo.id }
         assertEquals(listOf(ChecklistItem("Make list"), ChecklistItem("Go shopping")), spawned.checklist)
+    }
+
+    @Test
+    fun `daily capacity follows settings and defaults without a store`() = runTest {
+        val dueToday = sampleTodo(id = "today", dueDate = LocalDate.now()).copy(loe = 5)
+        val settings = FakeSettingsStore(capacity = 10)
+        val viewModel = TodoViewModel(FakeTodoDataSource(mutableListOf(dueToday)), settings)
+        advanceUntilIdle()
+
+        assertEquals(10, viewModel.dailyCapacity.value)
+        assertEquals(50f, viewModel.getLoeCapacityPercent())
+
+        settings.setDailyCapacity(0)
+        advanceUntilIdle()
+        assertEquals(0, viewModel.dailyCapacity.value)
+
+        val noStore = TodoViewModel(FakeTodoDataSource(mutableListOf()))
+        assertEquals(TodoViewModel.DEFAULT_DAILY_CAPACITY, noStore.dailyCapacity.value)
     }
 
     @Test
@@ -261,4 +283,29 @@ private class FakeTodoDataSource(
     override suspend fun pull(): GitRepository.GitResult = pullResult
 
     override suspend fun push(message: String): GitRepository.GitResult = pushResult
+}
+
+/** In-memory [SettingsStore]; only the capacity is observable, the rest are fixed values. */
+private class FakeSettingsStore(capacity: Int) : SettingsStore {
+    private val capacityFlow = MutableStateFlow(capacity)
+
+    override val gitRemoteUrl: Flow<String> = flowOf("")
+    override val gitUsername: Flow<String> = flowOf("")
+    override val gitToken: Flow<String> = flowOf("")
+    override val vaultPath: Flow<String> = flowOf("")
+    override val authorName: Flow<String> = flowOf("")
+    override val authorEmail: Flow<String> = flowOf("")
+    override val themeMode: Flow<String> = flowOf("system")
+    override val lastFilterState: Flow<String> = flowOf("")
+    override val dailyCapacity: Flow<Int> = capacityFlow
+
+    override suspend fun setGitRemoteUrl(url: String) = Unit
+    override suspend fun setGitUsername(username: String) = Unit
+    override suspend fun setGitToken(token: String) = Unit
+    override suspend fun setVaultPath(path: String) = Unit
+    override suspend fun setAuthorName(name: String) = Unit
+    override suspend fun setAuthorEmail(email: String) = Unit
+    override suspend fun setThemeMode(mode: String) = Unit
+    override suspend fun setLastFilterState(serialized: String) = Unit
+    override suspend fun setDailyCapacity(points: Int) { capacityFlow.value = points }
 }

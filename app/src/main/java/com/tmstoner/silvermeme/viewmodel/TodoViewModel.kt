@@ -50,6 +50,12 @@ class TodoViewModel(
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
+    /** Daily effort capacity from settings; 0 means the capacity bar is turned off. */
+    val dailyCapacity: StateFlow<Int> =
+        settingsStore?.dailyCapacity
+            ?.stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_DAILY_CAPACITY)
+            ?: MutableStateFlow(DEFAULT_DAILY_CAPACITY).asStateFlow()
+
     // ── Two-pane detail selection (tablet layout) ─────────────────────────────
 
     /**
@@ -478,7 +484,7 @@ class TodoViewModel(
     fun getTodayLoe(): Int = getLoeForDate(LocalDate.now())
 
     /** Percentage of [dailyCapacity] consumed by today's LOE total (may exceed 100). */
-    fun getLoeCapacityPercent(dailyCapacity: Int = DEFAULT_DAILY_CAPACITY): Float =
+    fun getLoeCapacityPercent(dailyCapacity: Int = this.dailyCapacity.value): Float =
         if (dailyCapacity <= 0) 0f else (getTodayLoe().toFloat() / dailyCapacity.toFloat()) * 100f
 
     // ── Selection methods (Track B2 - Bulk actions) ────────────────────────────
@@ -574,8 +580,8 @@ class TodoViewModel(
     }
 
     companion object {
-        /** Recommended daily LOE capacity, roughly an 8-hour work day. */
-        const val DEFAULT_DAILY_CAPACITY = 21
+        /** Daily LOE capacity used until the user changes it in Settings. */
+        const val DEFAULT_DAILY_CAPACITY = SettingsStore.DEFAULT_DAILY_CAPACITY
 
         /** Nulls sort last (no due date → end of list). */
         private val DUE_ASC: Comparator<TodoItem> = Comparator { a, b ->

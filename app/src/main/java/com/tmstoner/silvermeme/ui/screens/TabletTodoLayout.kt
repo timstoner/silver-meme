@@ -93,6 +93,7 @@ fun TabletTodoLayout(
     val groups            by viewModel.visibleGroups.collectAsStateWithLifecycle()
     val availableProjects by viewModel.availableProjects.collectAsStateWithLifecycle()
     val selectedIds       by viewModel.selectedIds.collectAsStateWithLifecycle()
+    val dailyCapacity     by viewModel.dailyCapacity.collectAsStateWithLifecycle()
     val selectedTodoId    by viewModel.selectedTodoId.collectAsStateWithLifecycle()
 
     val isSelecting = selectedIds.isNotEmpty()
@@ -377,6 +378,7 @@ fun TabletTodoLayout(
                             groups            = groups,
                             isLoading         = uiState.isLoading,
                             todayLoe          = todayLoe,
+                            dailyCapacity     = dailyCapacity,
                             selectedIds       = selectedIds,
                             onOpen            = { t ->
                                 newTaskRequested = false

@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tmstoner.silvermeme.data.model.TodoItem
 import com.tmstoner.silvermeme.viewmodel.TodoGroup
-import com.tmstoner.silvermeme.viewmodel.TodoViewModel
 
 /**
  * The grouped task list shared by the phone list screen and the tablet list pane:
@@ -50,12 +49,14 @@ import com.tmstoner.silvermeme.viewmodel.TodoViewModel
  * disabled and taps toggle selection instead of opening the task.
  *
  * @param todayLoe effort of open tasks due today; the capacity bar is hidden when 0.
+ * @param dailyCapacity effort points planned per day; 0 turns the capacity bar off.
  */
 @Composable
 fun TodoGroupList(
     groups: List<TodoGroup>,
     isLoading: Boolean,
     todayLoe: Int,
+    dailyCapacity: Int,
     selectedIds: Set<String>,
     onOpen: (TodoItem) -> Unit,
     onToggleComplete: (TodoItem) -> Unit,
@@ -90,11 +91,11 @@ fun TodoGroupList(
         } else {
             // Pinned above the list rather than a list item: an item inserted at the top
             // lands off-screen, because LazyColumn keeps the current first item in place.
-            if (todayLoe > 0) {
+            if (todayLoe > 0 && dailyCapacity > 0) {
                 val layoutDirection = LocalLayoutDirection.current
                 CapacityBar(
                     loe      = todayLoe,
-                    capacity = TodoViewModel.DEFAULT_DAILY_CAPACITY,
+                    capacity = dailyCapacity,
                     modifier = Modifier.padding(
                         start = contentPadding.calculateStartPadding(layoutDirection),
                         top   = contentPadding.calculateTopPadding(),

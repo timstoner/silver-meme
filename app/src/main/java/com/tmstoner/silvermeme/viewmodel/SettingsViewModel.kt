@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tmstoner.silvermeme.data.storage.SettingsDataStore
+import com.tmstoner.silvermeme.data.storage.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,8 +31,8 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
             settingsDataStore.authorName,
             settingsDataStore.authorEmail
         ) { path, name, email -> Triple(path, name, email) },
-        settingsDataStore.themeMode
-    ) { (url, user, token), (path, name, email), themeMode ->
+        combine(settingsDataStore.themeMode, settingsDataStore.dailyCapacity, ::Pair)
+    ) { (url, user, token), (path, name, email), (themeMode, dailyCapacity) ->
         SettingsUiState(
             gitRemoteUrl = url,
             gitUsername  = user,
@@ -39,7 +40,8 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
             vaultPath    = path,
             authorName   = name,
             authorEmail  = email,
-            themeMode    = themeMode
+            themeMode    = themeMode,
+            dailyCapacity = dailyCapacity
         )
     }.stateIn(
         scope = viewModelScope,
@@ -57,9 +59,11 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
         gitUsername: String,
         gitToken: String,
         authorName: String,
-        authorEmail: String
+        authorEmail: String,
+        dailyCapacity: String
     ) {
         viewModelScope.launch {
+            parseCapacity(dailyCapacity)?.let { settingsDataStore.setDailyCapacity(it) }
             settingsDataStore.setGitRemoteUrl(gitRemoteUrl.trim())
             settingsDataStore.setGitUsername(gitUsername.trim())
             settingsDataStore.setGitToken(gitToken.trim())
@@ -80,6 +84,21 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
         _isSaved.value = false
     }
 
+    companion object {
+        const val MAX_DAILY_CAPACITY = 200
+
+        /**
+         * Reads the capacity field: whole points in 0..[MAX_DAILY_CAPACITY], where 0 turns
+         * the capacity bar off. Blank means "back to the default". Anything else is
+         * rejected (null) so a typo never overwrites the saved value.
+         */
+        fun parseCapacity(input: String): Int? {
+            val text = input.trim()
+            if (text.isEmpty()) return SettingsStore.DEFAULT_DAILY_CAPACITY
+            return text.toIntOrNull()?.takeIf { it in 0..MAX_DAILY_CAPACITY }
+        }
+    }
+
     // ── Factory ───────────────────────────────────────────────────────────────
 
     class Factory(private val store: SettingsDataStore) : ViewModelProvider.Factory {
@@ -97,5 +116,7 @@ data class SettingsUiState(
     val authorName:   String = "SilverMeme",
     val authorEmail:  String = "silvermeme@local",
     /** "system", "light", or "dark". */
-    val themeMode:    String = "system"
+    val themeMode:    String = "system",
+    /** Effort points per day for the capacity bar; 0 turns it off. */
+    val dailyCapacity: Int   = SettingsStore.DEFAULT_DAILY_CAPACITY
 )

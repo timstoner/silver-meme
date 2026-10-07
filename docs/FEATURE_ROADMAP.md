@@ -1,6 +1,6 @@
 # SilverMeme — Feature Roadmap & Delegation Plan
 
-> **Status (2026-10-06):** Tracks A–F, G3, G4, H1 and H2 are done.
+> **Status (2026-10-06):** Tracks A–F, G3, G4 and H1–H4 are done.
 > Remaining and newly identified work is in **Next tracks** near the end of
 > this document — start there. The original track write-ups below are kept
 > as the spec/history for completed work.
@@ -361,7 +361,7 @@ parallelism. H1 and H2 both touch `TodoListScreen.kt`/`TabletTodoLayout.kt`
 - [x] H1 — Tablet parity for the list screen (shared `FilterChipRow` and `TodoGroupList` in `ui/components/`)
 - [x] H2 — Checklist editor and card progress (`ChecklistEditor`; "2/5" on cards; next occurrence of a
       recurring task starts unticked). Reordering items is not built yet.
-- [ ] H3 — Configurable daily capacity
+- [x] H3 — Configurable daily capacity (Settings → Planning; default 21, 0 hides the bar)
 - [x] H4 — Drop the deprecated Kotlin Android plugin (built-in Kotlin; `android.builtInKotlin=false` removed).
       Other AGP 9 opt-outs in `gradle.properties` (`android.newDsl=false` etc.) remain; each needs
       its own check before removal, and they must go before AGP 10.

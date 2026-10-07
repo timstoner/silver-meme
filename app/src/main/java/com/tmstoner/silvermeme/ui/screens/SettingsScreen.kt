@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
  *  - Username             (GitHub username)
  *  - Personal Access Token (kept locally in DataStore)
  *  - Author name / email  (for git commits)
+ * Plus appearance (theme) and planning (daily effort capacity).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +77,8 @@ fun SettingsScreen(
     var token        by remember(state.gitToken)      { mutableStateOf(state.gitToken)      }
     var authorName   by remember(state.authorName)    { mutableStateOf(state.authorName)    }
     var authorEmail  by remember(state.authorEmail)   { mutableStateOf(state.authorEmail)   }
+    var capacity     by remember(state.dailyCapacity) { mutableStateOf(state.dailyCapacity.toString()) }
+    val capacityValid = SettingsViewModel.parseCapacity(capacity) != null
     var tokenVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(isSaved) {
@@ -102,7 +105,11 @@ fun SettingsScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                viewModel.saveSettings(remoteUrl, username, token, authorName, authorEmail)
+                if (!capacityValid) {
+                    scope.launch { snackbarHostState.showSnackbar("Daily capacity must be 0–${SettingsViewModel.MAX_DAILY_CAPACITY}") }
+                    return@FloatingActionButton
+                }
+                viewModel.saveSettings(remoteUrl, username, token, authorName, authorEmail, capacity)
             }) {
                 Icon(Icons.Filled.Done, contentDescription = "Save settings")
             }
@@ -192,6 +199,28 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            Spacer(Modifier.height(8.dp))
+
+            // ── Section: Planning ─────────────────────────────────────────────
+            Text("Planning", style = MaterialTheme.typography.titleMedium)
+
+            OutlinedTextField(
+                value           = capacity,
+                onValueChange   = { input -> capacity = input.filter(Char::isDigit).take(3) },
+                label           = { Text("Daily effort capacity") },
+                suffix          = { Text("pts") },
+                singleLine      = true,
+                isError         = !capacityValid,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier        = Modifier.fillMaxWidth(),
+                supportingText  = {
+                    Text(
+                        if (capacityValid) "Effort you plan per day, shown in the list's capacity bar. 0 hides the bar."
+                        else "Enter 0–${SettingsViewModel.MAX_DAILY_CAPACITY}"
+                    )
+                }
+            )
 
             Spacer(Modifier.height(8.dp))
 
